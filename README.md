@@ -36,18 +36,18 @@ Model Whisperers submit their AI generation prompts into a secure vault (TEE - T
 
 ### Secure Enclave (TEE)
 ```
-┌──────────────────────────┐
-│    Trusted Execution     │
-│      Environment         │
+┌─────────────────────────┐
+│    Trusted Execution    │
+│      Environment        │
 │                         │
 │  ┌─────────────────┐    │
 │  │  Prompt Storage │    │
-│  └────────────────┘    │
+│  └─────────────────┘    │
 │  ┌─────────────────┐    │
 │  │   Generation    │    │
 │  │     Engine      │    │
 │  └─────────────────┘    │
-└──────────────────────────┘
+└─────────────────────────┘
 ```
 
 ### Smart Contract Architecture
