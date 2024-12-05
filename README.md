@@ -1,9 +1,11 @@
+<p align="center">
+  <img src="assets/logo.webp" alt="Yayoi's Garden Logo" width="200"/>
+</p>
+
 # 🎨 Yayoi's Garden
 ### _Where Prompts Become Precious_
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Status](https://img.shields.io/badge/status-alpha-orange.svg)
-![Smart Contract](https://img.shields.io/badge/solidity-0.8.19-black.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 
 > "In an age where prompts are copied endlessly, we make them sacred again."
 
@@ -40,7 +42,7 @@ Model Whisperes submit their AI generation prompts into a secure vault (TEE - Tr
 │                         │
 │  ┌─────────────────┐    │
 │  │  Prompt Storage │    │
-│  └─────────────────┘    │
+│  └────────────────┘    │
 │  ┌─────────────────┐    │
 │  │   Generation    │    │
 │  │     Engine      │    │
@@ -122,8 +124,11 @@ MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 - [Documentation](https://docs.enigmavault.eth)
 - [Discord](https://discord.gg/enigmavault)
 - [Twitter](https://twitter.com/enigmavault)
+- [Concept Site](https://irwze3radiy2ekk3owq11au1bak5dnsf.vercel.app/) (Placeholder/Demo)
 
 ---
 *Built with 💜 by prompt artists, for prompt artists*
 
-**Disclaimer: This project is not affiliated with Yayoi in any way**
+**Disclaimers:**
+- This project is not affiliated with Yayoi in any way
+- The concept site is a temporary demonstration and may not reflect the final product
