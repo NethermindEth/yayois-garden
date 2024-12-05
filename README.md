@@ -9,24 +9,26 @@
 
 ## 🌟 What is Yayoi's Garden?
 
-Yayoi's Garden is a decentralized platform that turns AI art prompts into time-limited digital artifacts. Think of it as a temporary art gallery where the brushes themselves are the masterpieces - visible in their effects but never in their essence.
+Welcome to Yayoi's Garden, a groundbreaking decentralized platform where AI innovators and artists converge to create something extraordinary. Here, talented prompt engineers (we call them Model Whisperers) can transform their unique AI generation formulas into time-limited digital assets that others can use - but never copy.
+
+Think of it as an exclusive digital atelier where master artists can monetize their techniques while maintaining their trade secrets. For creators, it's a chance to work with these proprietary styles during their limited lifetime. For collectors, each piece becomes part of a verifiable limited series, tied to a specific moment in time when that style was active.
 
 ### Core Concept
-Artists submit their carefully crafted prompts into a secure vault (TEE - Trusted Execution Environment). These prompts can be used by the community to generate art, but the prompt itself remains forever encrypted. After 30 days, the prompt self-destructs, making all artworks generated during its lifetime limited editions.
+Model Whisperes submit their AI generation prompts into a secure vault (TEE - Trusted Execution Environment). Patron Atrists can then pay to use these models to generate their own unique artworks. Each model can be used once per day, but the Model Artist's original prompt remains forever encrypted. After 30 days, the prompt self-destructs, making all artworks generated during its lifetime limited editions.
 
 ## ✨ Features
 
-### For Artists 🎨
-- **Secure Revenue Stream**: Earn 0.1 ETH per artwork generation
-- **Perfect Privacy**: Your prompt never leaves the secure enclave
-- **Reputation Building**: Gain recognition through your prompt's performance
-- **Analytics Dashboard**: Track your prompt's performance and earnings
+### For Model Artists 🎨
+- **Free Submission**: Upload your model prompt and generate one preview image
+- **Secure Revenue Stream**: Earn rewards on your art daily
+- **Perfect Privacy**: Your model prompt never leaves the secure enclave
+- **Reputation Building**: Gain recognition as your model gains popularity
+- **Analytics Dashboard**: Track your model's usage and earnings
 
-### For Art Enthusiasts 🖼
-- **Daily Generation**: One free generation per wallet per day
-- **Voting Power**: Help choose the day's featured prompt
-- **Collection Building**: Each piece is verifiably generated during the prompt's lifetime
-- **Community Rankings**: Vote on your favorite results
+### For Prompt Artists 🖌
+- **Daily Creation**: Submit your own prompts to your chosen model
+- **Collection Building**: Each piece is verifiably generated during the model's lifetime
+- **Community Rankings**: Help determine which models create the best art
 
 ## 🛠 Technical Architecture
 
@@ -54,30 +56,25 @@ Artists submit their carefully crafted prompts into a secure vault (TEE - Truste
 
 ## 💫 How It Works
 
-1. **Submission Phase**
-   - Artist submits prompt + 0.5 ETH deposit
-   - Prompt is encrypted and stored in TEE
-   - Smart contract creates tracking instance
+1. **Model Submission**
+   - Model Artists submit their base prompts for free and generate one preview
+   - To activate the model for public use, Model Artists pay 0.5 ETH
+   - Each model prompt is encrypted and stored in TEE
+   - Smart contract creates tracking instance for each model
 
 2. **Daily Operation**
-   - Community votes on active prompts
-   - Top prompt becomes "Prompt of the Day"
-   - Users can generate one artwork per wallet
-   - Artists earn automatically per generation
+   - Prompt Artists choose which models they want to use
+   - Each Prompt Artist pays 0.1 ETH to submit their prompt to a model
+   - A daily vote occurs on which prompt will be executed against the model
+   - The top prompt will have it's image generated and an NFT minted to the Prompt Artist
+   - The other prompters are refunded
+   Alternatively
+   - An auction occurs for the right to submit a prompt and win the NFT.
 
 3. **Sunset Phase**
-   - After 30 days, prompt is automatically destroyed
+   - After 30 days, each prompt is automatically destroyed
    - Final performance metrics are recorded
-   - Artist receives performance badges
-
-## 📊 Current Statistics
-```
-Total Prompts Submitted: 156
-Active Prompts: 24
-Total ETH Distributed: 1,456 ETH
-Highest Daily Earnings: 12.4 ETH
-Average Prompt Earnings: 9.3 ETH
-```
+   - Artists receive performance badges based on usage
 
 ## 🏆 Leaderboard Features
 - Real-time earnings tracking
@@ -87,20 +84,19 @@ Average Prompt Earnings: 9.3 ETH
 
 ## 🚀 Getting Started
 
-### For Artists
+### For Model Artists
 ```javascript
 Required:
-- 1 unique prompt
-- 0.5 ETH deposit
+- 1 unique model prompt
 - Connected wallet
 ```
 
-### For Collectors
+### For Prompt Artists
 ```javascript
 Required:
 - Connected wallet
-- Daily: Select prompt & generate
-- Optional: Participate in voting
+- 0.1 ETH per generation
+- Creative prompt to submit to chosen model
 ```
 
 ## 🔮 Future Roadmap
@@ -112,13 +108,7 @@ Required:
 
 ### Phase 2: Evolution
 - Multiple AI model support
-- Advanced prompt categories
-- Community governance
-
-### Phase 3: Ascension
-- Cross-chain support
-- Advanced analytics
-- Collaborative prompts
+- NFT stats
 
 ## 🤝 Contributing
 
