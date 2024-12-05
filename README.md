@@ -121,7 +121,7 @@ We welcome contributions! See our [CONTRIBUTING.md](CONTRIBUTING.md) for details
 MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## 🔗 Links
-- [Concept Site](https://irwze3radiy2ekk3owq11au1bak5dnsf.vercel.app/) (Placeholder/Demo)
+- [Concept Site](v0-yayoi-s-garden-qja17lcgri3.vercel.app) (Placeholder/Demo)
 
 ---
 *Built with 💜 by prompt artists, for prompt artists*
