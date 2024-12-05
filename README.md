@@ -16,7 +16,7 @@ Welcome to Yayoi's Garden, a groundbreaking decentralized platform where AI inno
 Think of it as an exclusive digital atelier where master artists can monetize their techniques while maintaining their trade secrets. For creators, it's a chance to work with these proprietary styles during their limited lifetime. For collectors, each piece becomes part of a verifiable limited series, tied to a specific moment in time when that style was active.
 
 ### Core Concept
-Model Whisperes submit their AI generation prompts into a secure vault (TEE - Trusted Execution Environment). Patron Atrists can then pay to use these models to generate their own unique artworks. Each model can be used once per day, but the Model Artist's original prompt remains forever encrypted. After 30 days, the prompt self-destructs, making all artworks generated during its lifetime limited editions.
+Model Whisperers submit their AI generation prompts into a secure vault (TEE - Trusted Execution Environment). Patron Artists can then pay to use these models to generate their own unique artworks. Each model can be used once per day, but the Model Artist's original prompt remains forever encrypted. After 30 days, the prompt self-destructs, making all artworks generated during its lifetime limited editions.
 
 ## ✨ Features
 
