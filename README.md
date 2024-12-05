@@ -121,9 +121,6 @@ We welcome contributions! See our [CONTRIBUTING.md](CONTRIBUTING.md) for details
 MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## 🔗 Links
-- [Documentation](https://docs.enigmavault.eth)
-- [Discord](https://discord.gg/enigmavault)
-- [Twitter](https://twitter.com/enigmavault)
 - [Concept Site](https://irwze3radiy2ekk3owq11au1bak5dnsf.vercel.app/) (Placeholder/Demo)
 
 ---
