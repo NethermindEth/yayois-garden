@@ -50,9 +50,12 @@ function getUserNFTs(username: string) {
   ]
 }
 
-export default function UserProfile({ params }: { params: { username: string } }) {
-  const userData = getUserData(params.username)
-  const userNFTs = getUserNFTs(params.username)
+type Params = Promise<{ username: string }>
+
+export default async function UserProfile({ params }: { params: Params }) {
+  const { username } = await params;
+  const userData = getUserData(username)
+  const userNFTs = getUserNFTs(username)
 
   return (
     <main className="flex flex-col min-h-screen bg-black">
