@@ -2,10 +2,17 @@
   <img src="assets/logo.webp" alt="Yayoi's Garden Logo" width="200"/>
 </p>
 
-# 🎨 Yayoi's Garden
-### _Where Prompts Become Precious_
+<h1 align="center">🎨 Yayoi's Garden</h1>
+<h3 align="center"><i>Where Prompts Become Precious</i></h3>
+
+<p align="center">
+  <a href="https://yayois.garden">
+    <img src="https://img.shields.io/badge/🌐_Visit_Live_Site-yayois.garden-FF69B4?style=for-the-badge" alt="Visit Live Site"/>
+  </a>
+</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/yayois_garden)
 
 > "In an age where prompts are copied endlessly, we make them sacred again."
 
@@ -42,16 +49,12 @@ Model Whisperers submit their AI generation prompts into a secure vault (TEE - T
 │                         │
 │  ┌─────────────────┐    │
 │  │  Prompt Storage │    │
-<<<<<<< HEAD
 │  └─────────────────┘    │
-=======
-│  └────��───────────┘    │
->>>>>>> f468b67 (feat: add telegram link to README)
 │  ┌─────────────────┐    │
 │  │   Generation    │    │
 │  │     Engine      │    │
 │  └─────────────────┘    │
-└─────────────────────────┘
+└──────────────────────────┘
 ```
 
 ### Smart Contract Architecture
@@ -125,7 +128,6 @@ We welcome contributions! See our [CONTRIBUTING.md](CONTRIBUTING.md) for details
 MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## 🔗 Links
-- [Concept Site](https://irwze3radiy2ekk3owq11au1bak5dnsf.vercel.app/) (Placeholder/Demo)
 - [![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/yayois_garden)
 
 ---
@@ -133,4 +135,3 @@ MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 **Disclaimers:**
 - This project is not affiliated with Yayoi in any way
-- The concept site is a temporary demonstration and may not reflect the final product
