@@ -42,7 +42,11 @@ Model Whisperers submit their AI generation prompts into a secure vault (TEE - T
 │                         │
 │  ┌─────────────────┐    │
 │  │  Prompt Storage │    │
+<<<<<<< HEAD
 │  └─────────────────┘    │
+=======
+│  └────��───────────┘    │
+>>>>>>> f468b67 (feat: add telegram link to README)
 │  ┌─────────────────┐    │
 │  │   Generation    │    │
 │  │     Engine      │    │
@@ -122,6 +126,7 @@ MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## 🔗 Links
 - [Concept Site](https://irwze3radiy2ekk3owq11au1bak5dnsf.vercel.app/) (Placeholder/Demo)
+- [![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/yayois_garden)
 
 ---
 *Built with 💜 by prompt artists, for prompt artists*
