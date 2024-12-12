@@ -25,7 +25,7 @@ export function Logo({ variant = 'colored', className = '' }: LogoProps) {
     },
   };
 
-  const fill = colors[variant];
+  const fill = colors[variant]; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   return (
     <svg
