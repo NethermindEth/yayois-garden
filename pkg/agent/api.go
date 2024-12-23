@@ -26,7 +26,7 @@ func (a *Agent) StartServer(ctx context.Context) error {
 	})
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    a.setupResult.ApiIpPort,
 		Handler: router,
 	}
 
