@@ -8,4 +8,5 @@ const (
 	EnvOpenAiApiKey        = "OPENAI_API_KEY"
 	EnvOpenAiModel         = "OPENAI_MODEL"
 	EnvPinataJwtKey        = "PINATA_JWT_KEY"
+	EnvApiIpPort           = "API_IP_PORT"
 )

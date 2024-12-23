@@ -84,8 +84,9 @@ func NewAgent(ctx context.Context, setupResult *setup.SetupResult) (*Agent, erro
 }
 
 func (a *Agent) Start(ctx context.Context) error {
-	events := make(chan indexer.PromptSuggestion, 1000)
+	go a.StartServer(ctx)
 
+	events := make(chan indexer.PromptSuggestion, 1000)
 	a.indexer.IndexEvents(ctx, events)
 
 	for event := range events {

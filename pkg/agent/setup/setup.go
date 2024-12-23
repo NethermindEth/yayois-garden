@@ -22,6 +22,7 @@ type SetupResult struct {
 	OpenAiApiKey        string
 	OpenAiModel         string
 	PinataJwtKey        string
+	ApiIpPort           string
 	PrivateKeySeed      []byte
 }
 
@@ -58,6 +59,7 @@ func generateSetup(config *Config) (*SetupResult, error) {
 		OpenAiApiKey:        config.OpenAiApiKey,
 		OpenAiModel:         config.OpenAiModel,
 		PinataJwtKey:        config.PinataJwtKey,
+		ApiIpPort:           config.ApiIpPort,
 		PrivateKeySeed:      privateKeySeed,
 	}, nil
 }
