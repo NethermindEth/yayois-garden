@@ -4,7 +4,10 @@ go 1.22
 
 toolchain go1.22.10
 
-require github.com/ethereum/go-ethereum v1.14.12
+require (
+	github.com/Dstack-TEE/dstack/sdk/go v0.0.0-20241220051010-5f529a6e48ed
+	github.com/ethereum/go-ethereum v1.14.12
+)
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
