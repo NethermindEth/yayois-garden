@@ -28,13 +28,13 @@ contract YayoiCollection is
 
     YayoiFactory public factory;
 
-    bytes32 public promptId;
+    string public systemPromptUri;
     IERC20 public paymentToken;
     uint256 public promptSubmissionPrice;
 
     uint256 private constant PROTOCOL_FEE_BPS = 1000; // 10% fee in basis points
 
-    event SetupCompleted(bytes32 promptId, address paymentToken, uint256 promptSubmissionPrice);
+    event SetupCompleted(string systemPromptUri, address paymentToken, uint256 promptSubmissionPrice);
     event PromptSubmitted(address indexed submitter, uint256 indexed tokenId, string uri);
     event PromptSubmissionPriceUpdated(uint256 price);
     event PromptSuggested(address indexed sender, string prompt);
@@ -44,42 +44,35 @@ contract YayoiCollection is
         _disableInitializers();
     }
 
-    function initialize(string calldata name, string calldata symbol, address _factory, address _owner)
-        public
-        initializer
-    {
-        require(_factory != address(0), "Invalid factory");
+    struct InitializeParams {
+        string name;
+        string symbol;
+        address factory;
+        address owner;
+        string systemPromptUri;
+        address paymentToken;
+        uint256 promptSubmissionPrice;
+    }
 
-        __ERC721_init(name, symbol);
+    function initialize(InitializeParams memory params) public initializer {
+        require(params.factory != address(0), "Invalid factory");
+
+        __ERC721_init(params.name, params.symbol);
         __ERC721URIStorage_init();
-        __Ownable_init(_owner);
-        __EIP712_init(name, "1");
+        __Ownable_init(params.owner);
+        __EIP712_init(params.name, "1");
 
-        factory = YayoiFactory(payable(_factory));
-        _transferOwnership(_factory);
-    }
+        factory = YayoiFactory(payable(params.factory));
+        systemPromptUri = params.systemPromptUri;
+        paymentToken = IERC20(params.paymentToken);
+        promptSubmissionPrice = params.promptSubmissionPrice;
 
-    function initializeOwner(address owner) external {
-        require(msg.sender == address(factory), "Only factory");
-        require(promptId == bytes32(0), "Already initialized");
-        _transferOwnership(owner);
-    }
-
-    function setup(bytes32 _promptId, address _paymentToken, uint256 _promptSubmissionPrice) external onlyOwner {
-        require(promptId == bytes32(0), "Already setup");
-        require(_promptId != bytes32(0), "Invalid prompt ID");
-        require(!factory.isPromptIdUsed(_promptId), "Prompt ID already used");
-
-        promptId = _promptId;
-        paymentToken = IERC20(_paymentToken);
-        promptSubmissionPrice = _promptSubmissionPrice;
-
-        factory.registerPromptId(_promptId);
-        emit SetupCompleted(_promptId, _paymentToken, _promptSubmissionPrice);
+        factory.registerSystemPromptUriHash(keccak256(bytes(params.systemPromptUri)));
+        emit SetupCompleted(params.systemPromptUri, params.paymentToken, params.promptSubmissionPrice);
     }
 
     function mintGeneratedToken(address to, string memory uri, bytes memory signature) external payable {
-        require(promptId != bytes32(0), "Not initialized");
+        require(address(factory) != address(0), "Not initialized");
 
         uint256 tokenId = nextTokenId;
         nextTokenId = tokenId + 1;
@@ -137,30 +130,9 @@ contract YayoiCollection is
         }
     }
 
-    receive() external payable {}
-
-    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+    function domainSeparator() external view returns (bytes32) {
         return _domainSeparatorV4();
     }
 
-    function systemPromptId() external view returns (bytes32) {
-        return promptId;
-    }
-
-    function eip712Domain()
-        public
-        view
-        override(EIP712Upgradeable, IERC5267)
-        returns (
-            bytes1 fields,
-            string memory name,
-            string memory version,
-            uint256 chainId,
-            address verifyingContract,
-            bytes32 salt,
-            uint256[] memory extensions
-        )
-    {
-        return (0x0f, "Yayoi", "1", block.chainid, address(this), bytes32(0), new uint256[](0));
-    }
+    receive() external payable {}
 }

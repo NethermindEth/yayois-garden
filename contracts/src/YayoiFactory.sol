@@ -19,7 +19,7 @@ contract YayoiFactory is Ownable {
 
     uint256 public constant PROTOCOL_FEE_BPS = 1000; // 10% fee in basis points
 
-    mapping(bytes32 => bool) public usedPromptIds;
+    mapping(bytes32 => bool) public usedSystemPromptUriHashes;
     mapping(address => bool) public isAuthorizedSigner;
     mapping(address => bool) public registeredCollections;
 
@@ -28,7 +28,7 @@ contract YayoiFactory is Ownable {
     event PaymentTokenUpdated(address indexed token);
     event CreationPriceUpdated(uint256 price);
     event ProtocolFeeDestinationUpdated(address indexed destination);
-    event PromptIdRegistered(bytes32 indexed promptId);
+    event SystemPromptUriHashRegistered(bytes32 indexed promptUriHash);
 
     constructor(address _paymentToken, uint256 _creationPrice, address _protocolFeeDestination) Ownable(msg.sender) {
         paymentToken = IERC20(_paymentToken);
@@ -38,7 +38,15 @@ contract YayoiFactory is Ownable {
         collectionImpl = new YayoiCollection();
     }
 
-    function createCollection(string calldata name, string calldata symbol)
+    struct CreateCollectionParams {
+        string name;
+        string symbol;
+        string systemPromptUri;
+        address paymentToken;
+        uint256 promptSubmissionPrice;
+    }
+
+    function createCollection(CreateCollectionParams memory params)
         external
         payable
         returns (address payable collection)
@@ -51,7 +59,18 @@ contract YayoiFactory is Ownable {
 
         collection = payable(address(collectionImpl).clone());
 
-        YayoiCollection(collection).initialize(name, symbol, address(this), msg.sender);
+        YayoiCollection(collection).initialize(
+            YayoiCollection.InitializeParams({
+                name: params.name,
+                symbol: params.symbol,
+                factory: address(this),
+                owner: msg.sender,
+                systemPromptUri: params.systemPromptUri,
+                paymentToken: params.paymentToken,
+                promptSubmissionPrice: params.promptSubmissionPrice
+            })
+        );
+
         registeredCollections[address(collection)] = true;
 
         emit CollectionCreated(collection, msg.sender);
@@ -87,19 +106,19 @@ contract YayoiFactory is Ownable {
         emit ProtocolFeeDestinationUpdated(destination);
     }
 
-    function isPromptIdUsed(bytes32 promptId) public view returns (bool) {
-        return usedPromptIds[promptId];
-    }
-
     function isRegisteredCollection(address collection) public view returns (bool) {
         return registeredCollections[collection];
     }
 
-    function registerPromptId(bytes32 promptId) external returns (bool) {
-        require(!usedPromptIds[promptId], "Prompt ID already used");
+    function isSystemPromptUriHashUsed(bytes32 promptUriHash) public view returns (bool) {
+        return usedSystemPromptUriHashes[promptUriHash];
+    }
 
-        usedPromptIds[promptId] = true;
-        emit PromptIdRegistered(promptId);
+    function registerSystemPromptUriHash(bytes32 promptUriHash) external returns (bool) {
+        require(!usedSystemPromptUriHashes[promptUriHash], "Prompt URI hash already used");
+
+        usedSystemPromptUriHashes[promptUriHash] = true;
+        emit SystemPromptUriHashRegistered(promptUriHash);
 
         return true;
     }
