@@ -21,6 +21,7 @@ type SetupResult struct {
 	SecureFile          string
 	OpenAiApiKey        string
 	OpenAiModel         string
+	PinataJwtKey        string
 	PrivateKeySeed      []byte
 }
 
@@ -56,6 +57,7 @@ func generateSetup(config *Config) (*SetupResult, error) {
 		SecureFile:          config.SecureFile,
 		OpenAiApiKey:        config.OpenAiApiKey,
 		OpenAiModel:         config.OpenAiModel,
+		PinataJwtKey:        config.PinataJwtKey,
 		PrivateKeySeed:      privateKeySeed,
 	}, nil
 }

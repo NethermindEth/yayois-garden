@@ -12,6 +12,7 @@ type Config struct {
 	SecureFile          string
 	OpenAiApiKey        string
 	OpenAiModel         string
+	PinataJwtKey        string
 }
 
 func NewConfigFromEnv() (*Config, error) {
@@ -22,6 +23,7 @@ func NewConfigFromEnv() (*Config, error) {
 		SecureFile:          os.Getenv(EnvSecureFile),
 		OpenAiApiKey:        os.Getenv(EnvOpenAiApiKey),
 		OpenAiModel:         os.Getenv(EnvOpenAiModel),
+		PinataJwtKey:        os.Getenv(EnvPinataJwtKey),
 	}
 
 	err := config.Validate()
@@ -50,6 +52,9 @@ func (c *Config) Validate() error {
 	}
 	if c.OpenAiModel == "" {
 		return errors.New(EnvOpenAiModel + " is required")
+	}
+	if c.PinataJwtKey == "" {
+		return errors.New(EnvPinataJwtKey + " is required")
 	}
 
 	return nil

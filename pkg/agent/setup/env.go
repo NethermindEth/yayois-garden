@@ -7,4 +7,5 @@ const (
 	EnvSecureFile          = "SECURE_FILE"
 	EnvOpenAiApiKey        = "OPENAI_API_KEY"
 	EnvOpenAiModel         = "OPENAI_MODEL"
+	EnvPinataJwtKey        = "PINATA_JWT_KEY"
 )
