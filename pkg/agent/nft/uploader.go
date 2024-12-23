@@ -17,7 +17,7 @@ func NewNftUploader(uploader filestorage.Uploader) *NftUploader {
 	}
 }
 
-func (u *NftUploader) Upload(ctx context.Context, name, description, imageUri string) (string, error) {
+func (u *NftUploader) UploadUrl(ctx context.Context, name, description, imageUri string) (string, error) {
 	imageIpfsHash, err := u.uploader.UploadUrl(ctx, imageUri)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file to ipfs: %v", err)
