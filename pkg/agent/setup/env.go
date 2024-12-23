@@ -6,4 +6,5 @@ const (
 	EnvFactoryAddress      = "FACTORY_ADDRESS"
 	EnvSecureFile          = "SECURE_FILE"
 	EnvOpenAiApiKey        = "OPENAI_API_KEY"
+	EnvOpenAiModel         = "OPENAI_MODEL"
 )

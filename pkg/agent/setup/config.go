@@ -11,6 +11,7 @@ type Config struct {
 	FactoryAddress      string
 	SecureFile          string
 	OpenAiApiKey        string
+	OpenAiModel         string
 }
 
 func NewConfigFromEnv() (*Config, error) {
@@ -20,6 +21,7 @@ func NewConfigFromEnv() (*Config, error) {
 		FactoryAddress:      os.Getenv(EnvFactoryAddress),
 		SecureFile:          os.Getenv(EnvSecureFile),
 		OpenAiApiKey:        os.Getenv(EnvOpenAiApiKey),
+		OpenAiModel:         os.Getenv(EnvOpenAiModel),
 	}
 
 	err := config.Validate()
@@ -32,19 +34,22 @@ func NewConfigFromEnv() (*Config, error) {
 
 func (c *Config) Validate() error {
 	if c.DstackTappdEndpoint == "" {
-		return errors.New("DSTACK_TAPPD_ENDPOINT is required")
+		return errors.New(EnvDstackTappdEndpoint + " is required")
 	}
 	if c.EthereumRpcUrl == "" {
-		return errors.New("ETHEREUM_RPC_URL is required")
+		return errors.New(EnvEthereumRpcUrl + " is required")
 	}
 	if c.FactoryAddress == "" {
-		return errors.New("FACTORY_ADDRESS is required")
+		return errors.New(EnvFactoryAddress + " is required")
 	}
 	if c.SecureFile == "" {
-		return errors.New("SECURE_FILE is required")
+		return errors.New(EnvSecureFile + " is required")
 	}
 	if c.OpenAiApiKey == "" {
-		return errors.New("OPENAI_API_KEY is required")
+		return errors.New(EnvOpenAiApiKey + " is required")
+	}
+	if c.OpenAiModel == "" {
+		return errors.New(EnvOpenAiModel + " is required")
 	}
 
 	return nil

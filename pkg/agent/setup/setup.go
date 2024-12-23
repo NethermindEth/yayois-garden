@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/NethermindEth/yayois-garden/pkg/agent/debug"
 	"github.com/NethermindEth/yayois-garden/pkg/agent/sealing"
 )
@@ -15,9 +17,10 @@ import (
 type SetupResult struct {
 	DstackTappdEndpoint string
 	EthereumRpcUrl      string
-	FactoryAddress      string
+	FactoryAddress      common.Address
 	SecureFile          string
 	OpenAiApiKey        string
+	OpenAiModel         string
 	PrivateKeySeed      []byte
 }
 
@@ -49,9 +52,10 @@ func generateSetup(config *Config) (*SetupResult, error) {
 	return &SetupResult{
 		DstackTappdEndpoint: config.DstackTappdEndpoint,
 		EthereumRpcUrl:      config.EthereumRpcUrl,
-		FactoryAddress:      config.FactoryAddress,
+		FactoryAddress:      common.HexToAddress(config.FactoryAddress),
 		SecureFile:          config.SecureFile,
 		OpenAiApiKey:        config.OpenAiApiKey,
+		OpenAiModel:         config.OpenAiModel,
 		PrivateKeySeed:      privateKeySeed,
 	}, nil
 }
