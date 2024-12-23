@@ -1,0 +1,15 @@
+version: '3.9'
+services:
+  yayois-agent:
+    build:
+      context: .
+    volumes:
+      - /var/run/tappd.sock:/var/run/tappd.sock
+      - /tmp/tapp-ramdisk:/tmp/tapp-ramdisk
+    ports:
+      - "8080:8080"
+    environment:
+      - DSTACK_TAPPD_ENDPOINT=/var/run/tappd.sock
+      - ETHEREUM_RPC_URL=
+      - FACTORY_ADDRESS=
+      - SECURE_FILE=/tmp/tapp-ramdisk/secure.json
