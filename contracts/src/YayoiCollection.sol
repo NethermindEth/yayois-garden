@@ -44,12 +44,16 @@ contract YayoiCollection is
         _disableInitializers();
     }
 
-    function initialize(address _factory, address _owner) public initializer {
+    function initialize(string calldata name, string calldata symbol, address _factory, address _owner)
+        public
+        initializer
+    {
         require(_factory != address(0), "Invalid factory");
-        __ERC721_init("Yayoi", "YAY");
+
+        __ERC721_init(name, symbol);
         __ERC721URIStorage_init();
         __Ownable_init(_owner);
-        __EIP712_init("Yayoi", "1");
+        __EIP712_init(name, "1");
 
         factory = YayoiFactory(payable(_factory));
         _transferOwnership(_factory);

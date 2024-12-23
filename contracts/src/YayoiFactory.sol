@@ -38,7 +38,11 @@ contract YayoiFactory is Ownable {
         collectionImpl = new YayoiCollection();
     }
 
-    function createCollection() external payable returns (address payable collection) {
+    function createCollection(string calldata name, string calldata symbol)
+        external
+        payable
+        returns (address payable collection)
+    {
         if (address(paymentToken) != address(0)) {
             paymentToken.safeTransferFrom(msg.sender, address(this), creationPrice);
         } else {
@@ -47,7 +51,7 @@ contract YayoiFactory is Ownable {
 
         collection = payable(address(collectionImpl).clone());
 
-        YayoiCollection(collection).initialize(address(this), msg.sender);
+        YayoiCollection(collection).initialize(name, symbol, address(this), msg.sender);
         registeredCollections[address(collection)] = true;
 
         emit CollectionCreated(collection, msg.sender);
