@@ -3,5 +3,5 @@ package art
 import "context"
 
 type ArtGenerator interface {
-	Generate(ctx context.Context, systemPrompt string, prompt string) ([]byte, error)
+	GenerateUrl(ctx context.Context, systemPrompt string, prompt string) (string, error)
 }
