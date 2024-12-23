@@ -13,6 +13,12 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "./YayoiFactory.sol";
 
+/**
+ * @title YayoiCollection
+ * @notice An upgradeable ERC721 contract for managing AI-generated art
+ * collections. Supports EIP-712 signatures for minting and includes payment
+ * functionality.
+ */
 contract YayoiCollection is
     Initializable,
     ERC721URIStorageUpgradeable,
@@ -22,21 +28,52 @@ contract YayoiCollection is
 {
     using SafeERC20 for IERC20;
 
+    /// @dev EIP-712 typehash for minting signatures
     bytes32 private constant MINT_TYPEHASH = keccak256("Mint(address to,string uri)");
 
+    /// @notice Counter for token IDs
     uint256 public nextTokenId;
 
+    /// @notice Reference to the factory contract that created this collection
     YayoiFactory public factory;
 
+    /// @notice URI containing the system prompt used for this collection
     string public systemPromptUri;
+    /// @notice Token used for payments (address(0) for ETH)
     IERC20 public paymentToken;
+    /// @notice Price to submit a prompt and mint a token
     uint256 public promptSubmissionPrice;
 
-    uint256 private constant PROTOCOL_FEE_BPS = 1000; // 10% fee in basis points
+    /// @dev Protocol fee in basis points (10%)
+    uint256 private constant PROTOCOL_FEE_BPS = 1000;
 
+    /**
+     * @notice Emitted when collection setup is completed
+     * @param systemPromptUri The URI of the system prompt
+     * @param paymentToken Address of the token used for payments
+     * @param promptSubmissionPrice Price to submit a prompt
+     */
     event SetupCompleted(string systemPromptUri, address paymentToken, uint256 promptSubmissionPrice);
+    
+    /**
+     * @notice Emitted when a prompt is submitted and token is minted
+     * @param submitter Address that submitted the prompt
+     * @param tokenId ID of the minted token
+     * @param uri URI containing the prompt and generated art
+     */
     event PromptSubmitted(address indexed submitter, uint256 indexed tokenId, string uri);
+    
+    /**
+     * @notice Emitted when prompt submission price is updated
+     * @param price New price for prompt submissions
+     */
     event PromptSubmissionPriceUpdated(uint256 price);
+    
+    /**
+     * @notice Emitted when a prompt is suggested without minting
+     * @param sender Address that suggested the prompt
+     * @param prompt The suggested prompt text
+     */
     event PromptSuggested(address indexed sender, string prompt);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -44,6 +81,16 @@ contract YayoiCollection is
         _disableInitializers();
     }
 
+    /**
+     * @notice Parameters for initializing the collection
+     * @param name Collection name
+     * @param symbol Collection symbol
+     * @param factory Address of the factory contract
+     * @param owner Address that will own the collection
+     * @param systemPromptUri URI of the system prompt
+     * @param paymentToken Address of token used for payments
+     * @param promptSubmissionPrice Price to submit a prompt
+     */
     struct InitializeParams {
         string name;
         string symbol;
@@ -54,6 +101,10 @@ contract YayoiCollection is
         uint256 promptSubmissionPrice;
     }
 
+    /**
+     * @notice Initializes the collection with the given parameters
+     * @param params Initialization parameters
+     */
     function initialize(InitializeParams memory params) public initializer {
         require(params.factory != address(0), "Invalid factory");
 
@@ -71,6 +122,12 @@ contract YayoiCollection is
         emit SetupCompleted(params.systemPromptUri, params.paymentToken, params.promptSubmissionPrice);
     }
 
+    /**
+     * @notice Mints a new token with a verified signature
+     * @param to Address to mint the token to
+     * @param uri URI containing the prompt and generated art
+     * @param signature EIP-712 signature from an authorized signer
+     */
     function mintGeneratedToken(address to, string memory uri, bytes memory signature) external payable {
         require(address(factory) != address(0), "Not initialized");
 
@@ -112,15 +169,27 @@ contract YayoiCollection is
         emit PromptSubmitted(msg.sender, tokenId, uri);
     }
 
+    /**
+     * @notice Suggests a prompt without minting a token
+     * @param prompt The prompt text to suggest
+     */
     function suggestPrompt(string memory prompt) external {
         emit PromptSuggested(msg.sender, prompt);
     }
 
+    /**
+     * @notice Sets a new price for prompt submissions
+     * @param _price New price in payment token units
+     */
     function setPromptSubmissionPrice(uint256 _price) external onlyOwner {
         promptSubmissionPrice = _price;
         emit PromptSubmissionPriceUpdated(_price);
     }
 
+    /**
+     * @notice Withdraws tokens or ETH from the contract
+     * @param token Address of token to withdraw (address(0) for ETH)
+     */
     function sweepTokens(address token) external onlyOwner {
         if (token == address(0)) {
             (bool success,) = msg.sender.call{value: address(this).balance}("");
@@ -130,9 +199,14 @@ contract YayoiCollection is
         }
     }
 
+    /**
+     * @notice Returns the EIP-712 domain separator
+     * @return bytes32 The domain separator
+     */
     function domainSeparator() external view returns (bytes32) {
         return _domainSeparatorV4();
     }
 
+    /// @notice Allows the contract to receive ETH
     receive() external payable {}
 }
