@@ -7,6 +7,7 @@ toolchain go1.22.10
 require (
 	github.com/Dstack-TEE/dstack/sdk/go v0.0.0-20241220051010-5f529a6e48ed
 	github.com/ethereum/go-ethereum v1.14.12
+	github.com/sashabaranov/go-openai v1.36.0
 )
 
 require (
