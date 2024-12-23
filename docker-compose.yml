@@ -10,6 +10,11 @@ services:
       - "8080:8080"
     environment:
       - DSTACK_TAPPD_ENDPOINT=/var/run/tappd.sock
-      - ETHEREUM_RPC_URL=
-      - FACTORY_ADDRESS=
+      - ETHEREUM_RPC_URL=https://rpc.ankr.com/eth_sepolia
+      - FACTORY_ADDRESS=0x0000000000000000000000000000000000000000
       - SECURE_FILE=/tmp/tapp-ramdisk/secure.json
+      - OPENAI_API_KEY=test
+      - OPENAI_MODEL=dall-e-3
+      - PINATA_JWT_KEY=test
+      - DEBUG_PLAIN_SETUP=true
+      - DEBUG_SHOW_SETUP=true
