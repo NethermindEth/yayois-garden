@@ -13,6 +13,7 @@ type Config struct {
 	OpenAiApiKey        string
 	OpenAiModel         string
 	PinataJwtKey        string
+	ApiIpPort           string
 }
 
 func NewConfigFromEnv() (*Config, error) {
@@ -24,6 +25,7 @@ func NewConfigFromEnv() (*Config, error) {
 		OpenAiApiKey:        os.Getenv(EnvOpenAiApiKey),
 		OpenAiModel:         os.Getenv(EnvOpenAiModel),
 		PinataJwtKey:        os.Getenv(EnvPinataJwtKey),
+		ApiIpPort:           os.Getenv(EnvApiIpPort),
 	}
 
 	err := config.Validate()
@@ -56,6 +58,8 @@ func (c *Config) Validate() error {
 	if c.PinataJwtKey == "" {
 		return errors.New(EnvPinataJwtKey + " is required")
 	}
-
+	if c.ApiIpPort == "" {
+		return errors.New(EnvApiIpPort + " is required")
+	}
 	return nil
 }

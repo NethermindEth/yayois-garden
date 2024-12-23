@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dstack-TEE/dstack/sdk/go/tappd"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
@@ -23,6 +24,8 @@ import (
 )
 
 type Agent struct {
+	setupResult *setup.SetupResult
+
 	mu sync.Mutex
 
 	artGenerator art.ArtGenerator
@@ -30,6 +33,7 @@ type Agent struct {
 	ethClient    *ethclient.Client
 	wallet       *wallet.Wallet
 	nftUploader  *nft.NftUploader
+	tappdClient  *tappd.TappdClient
 }
 
 func NewAgent(ctx context.Context, setupResult *setup.SetupResult) (*Agent, error) {
@@ -63,19 +67,27 @@ func NewAgent(ctx context.Context, setupResult *setup.SetupResult) (*Agent, erro
 		filestorage.NewPinataUploader(setupResult.PinataJwtKey),
 	)
 
+	tappdClient := tappd.NewTappdClient(
+		tappd.WithEndpoint(setupResult.DstackTappdEndpoint),
+	)
+
 	return &Agent{
+		setupResult: setupResult,
+
 		artGenerator: artGenerator,
 		indexer:      indexer,
 		ethClient:    ethClient,
 		wallet:       wallet,
 		nftUploader:  nftUploader,
+		tappdClient:  tappdClient,
 	}, nil
 }
 
 func (a *Agent) Start(ctx context.Context) error {
-	events := make(chan indexer.PromptSuggestion, 1000)
+	go a.StartServer(ctx)
 
-	go a.indexer.IndexEvents(ctx, events)
+	events := make(chan indexer.PromptSuggestion, 1000)
+	a.indexer.IndexEvents(ctx, events)
 
 	for event := range events {
 		go a.processEvent(ctx, event)
@@ -160,4 +172,18 @@ func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
 	}
 
 	return string(body), nil
+}
+
+func (a *Agent) quote(ctx context.Context) (string, error) {
+	reportDataBytes, err := generateReportDataBytes(a.wallet.Address(), a.setupResult.FactoryAddress)
+	if err != nil {
+		return "", err
+	}
+
+	quote, err := a.tappdClient.TdxQuote(ctx, reportDataBytes)
+	if err != nil {
+		return "", err
+	}
+
+	return quote.Quote, nil
 }

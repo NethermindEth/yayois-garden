@@ -16,5 +16,6 @@ services:
       - OPENAI_API_KEY=test
       - OPENAI_MODEL=dall-e-3
       - PINATA_JWT_KEY=test
+      - API_IP_PORT=0.0.0.0:8080
       - DEBUG_PLAIN_SETUP=true
       - DEBUG_SHOW_SETUP=true
