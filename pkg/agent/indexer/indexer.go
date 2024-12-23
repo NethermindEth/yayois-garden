@@ -27,6 +27,8 @@ type Indexer struct {
 }
 
 type PromptSuggestion struct {
+	Log    types.Log
+	Sender common.Address
 	Prompt string
 }
 
@@ -132,6 +134,8 @@ func (i *Indexer) watchPromptSuggestions(ctx context.Context, ch chan<- PromptSu
 				}
 
 				ch <- PromptSuggestion{
+					Log:    promptSuggestedLog.Raw,
+					Sender: promptSuggestedLog.Sender,
 					Prompt: promptSuggestedLog.Prompt,
 				}
 			}
