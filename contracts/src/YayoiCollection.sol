@@ -54,7 +54,7 @@ contract YayoiCollection is
      * @param promptSubmissionPrice Price to submit a prompt
      */
     event SetupCompleted(string systemPromptUri, address paymentToken, uint256 promptSubmissionPrice);
-    
+
     /**
      * @notice Emitted when a prompt is submitted and token is minted
      * @param submitter Address that submitted the prompt
@@ -62,13 +62,13 @@ contract YayoiCollection is
      * @param uri URI containing the prompt and generated art
      */
     event PromptSubmitted(address indexed submitter, uint256 indexed tokenId, string uri);
-    
+
     /**
      * @notice Emitted when prompt submission price is updated
      * @param price New price for prompt submissions
      */
     event PromptSubmissionPriceUpdated(uint256 price);
-    
+
     /**
      * @notice Emitted when a prompt is suggested without minting
      * @param sender Address that suggested the prompt
@@ -118,7 +118,6 @@ contract YayoiCollection is
         paymentToken = IERC20(params.paymentToken);
         promptSubmissionPrice = params.promptSubmissionPrice;
 
-        factory.registerSystemPromptUriHash(keccak256(bytes(params.systemPromptUri)));
         emit SetupCompleted(params.systemPromptUri, params.paymentToken, params.promptSubmissionPrice);
     }
 

@@ -28,8 +28,6 @@ contract YayoiFactory is Ownable {
     /// @notice Protocol fee percentage in basis points (10%)
     uint256 public constant PROTOCOL_FEE_BPS = 1000;
 
-    /// @notice Tracks which system prompt URI hashes have been used
-    mapping(bytes32 => bool) public usedSystemPromptUriHashes;
     /// @notice Tracks which addresses are authorized to sign minting requests
     mapping(address => bool) public isAuthorizedSigner;
     /// @notice Tracks which addresses are registered collection contracts
@@ -94,7 +92,9 @@ contract YayoiFactory is Ownable {
             require(msg.value >= creationPrice, "Insufficient payment");
         }
 
-        collection = payable(address(collectionImpl).clone());
+        bytes32 salt = keccak256(bytes(params.systemPromptUri));
+
+        collection = payable(address(collectionImpl).cloneDeterministic(salt));
 
         YayoiCollection(collection).initialize(
             YayoiCollection.InitializeParams({
@@ -174,26 +174,17 @@ contract YayoiFactory is Ownable {
     }
 
     /**
-     * @notice Checks if a system prompt URI hash has been used
-     * @param promptUriHash Hash to check
-     * @return bool True if hash has been used
+     * @notice Gets a collection address from a system prompt URI
+     * @param systemPromptUri System prompt URI
+     * @return collection Address of the collection
      */
-    function isSystemPromptUriHashUsed(bytes32 promptUriHash) public view returns (bool) {
-        return usedSystemPromptUriHashes[promptUriHash];
-    }
+    function getCollectionFromSystemPromptUri(string memory systemPromptUri) public view returns (address) {
+        bytes32 salt = keccak256(bytes(systemPromptUri));
+        address collection = address(collectionImpl).predictDeterministicAddress(salt);
 
-    /**
-     * @notice Registers a system prompt URI hash as used
-     * @param promptUriHash Hash to register
-     * @return bool True if registration was successful
-     */
-    function registerSystemPromptUriHash(bytes32 promptUriHash) external returns (bool) {
-        require(!usedSystemPromptUriHashes[promptUriHash], "Prompt URI hash already used");
+        require(registeredCollections[collection], "Collection not found");
 
-        usedSystemPromptUriHashes[promptUriHash] = true;
-        emit SystemPromptUriHashRegistered(promptUriHash);
-
-        return true;
+        return collection;
     }
 
     /**
