@@ -86,11 +86,12 @@ contract YayoiCollectionTest is Test {
         assertEq(collection.tokenURI(0), tokenUri);
     }
 
-    function testFailMintWithInvalidSignature() public {
+    function testRevertIfInvalidSignature() public {
         bytes memory invalidSignature = new bytes(65);
 
         vm.startPrank(user);
         paymentToken.approve(address(collection), PROMPT_PRICE);
+        vm.expectRevert();
         collection.mintGeneratedToken(user, "ipfs://token1", invalidSignature);
         vm.stopPrank();
     }
@@ -121,8 +122,9 @@ contract YayoiCollectionTest is Test {
         assertEq(collection.promptSubmissionPrice(), newPrice);
     }
 
-    function testFailSetPromptSubmissionPriceUnauthorized() public {
+    function testRevertIfUnauthorizedSetPromptSubmissionPrice() public {
         vm.prank(user);
+        vm.expectRevert();
         collection.setPromptSubmissionPrice(0.2 ether);
     }
 
@@ -138,8 +140,9 @@ contract YayoiCollectionTest is Test {
         assertEq(paymentToken.balanceOf(address(collection)), 0);
     }
 
-    function testFailSweepTokensUnauthorized() public {
+    function testRevertIfUnauthorizedSweepTokens() public {
         vm.prank(user);
+        vm.expectRevert();
         collection.sweepTokens(address(paymentToken));
     }
 }
