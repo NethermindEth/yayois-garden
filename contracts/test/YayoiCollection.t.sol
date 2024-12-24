@@ -96,11 +96,22 @@ contract YayoiCollectionTest is Test {
     }
 
     function testSuggestPrompt() public {
+        vm.startPrank(user);
+        paymentToken.approve(address(collection), PROMPT_PRICE);
+
+        uint256 protocolFeeBefore = paymentToken.balanceOf(address(factory));
+        uint256 collectionFeeBefore = paymentToken.balanceOf(address(collection));
+
         vm.expectEmit(true, false, false, true);
         emit YayoiCollection.PromptSuggested(user, "Test prompt");
-
-        vm.prank(user);
         collection.suggestPrompt("Test prompt");
+
+        uint256 protocolFee = (PROMPT_PRICE * 1000) / 10000; // 10% fee
+        uint256 collectionFee = PROMPT_PRICE - protocolFee;
+
+        assertEq(paymentToken.balanceOf(address(factory)) - protocolFeeBefore, protocolFee);
+        assertEq(paymentToken.balanceOf(address(collection)) - collectionFeeBefore, collectionFee);
+        vm.stopPrank();
     }
 
     function testSetPromptSubmissionPrice() public {

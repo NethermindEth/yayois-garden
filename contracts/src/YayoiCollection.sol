@@ -127,33 +127,11 @@ contract YayoiCollection is
      * @param uri URI containing the prompt and generated art
      * @param signature EIP-712 signature from an authorized signer
      */
-    function mintGeneratedToken(address to, string memory uri, bytes memory signature) external payable {
+    function mintGeneratedToken(address to, string memory uri, bytes memory signature) external {
         require(address(factory) != address(0), "Not initialized");
 
         uint256 tokenId = nextTokenId;
         nextTokenId = tokenId + 1;
-
-        // Handle payment and protocol fee
-        uint256 protocolFee = (promptSubmissionPrice * PROTOCOL_FEE_BPS) / 10000;
-        uint256 collectionFee = promptSubmissionPrice - protocolFee;
-
-        if (address(paymentToken) != address(0)) {
-            paymentToken.safeTransferFrom(msg.sender, address(factory), protocolFee);
-            paymentToken.safeTransferFrom(msg.sender, address(this), collectionFee);
-        } else {
-            require(msg.value >= promptSubmissionPrice, "Insufficient payment");
-
-            // Forward protocol fee to factory
-            (bool success1,) = payable(address(factory)).call{value: protocolFee}("");
-            require(success1, "Protocol fee transfer failed");
-
-            // Return only the excess above promptSubmissionPrice
-            if (msg.value > promptSubmissionPrice) {
-                (bool success2,) = payable(msg.sender).call{value: msg.value - promptSubmissionPrice}("");
-                require(success2, "Excess ETH return failed");
-            }
-            // Collection fee remains in the contract automatically
-        }
 
         // Verify signature
         bytes32 structHash = keccak256(abi.encode(MINT_TYPEHASH, to, keccak256(bytes(uri))));
@@ -172,7 +150,25 @@ contract YayoiCollection is
      * @notice Suggests a prompt without minting a token
      * @param prompt The prompt text to suggest
      */
-    function suggestPrompt(string memory prompt) external {
+    function suggestPrompt(string memory prompt) external payable {
+        uint256 protocolFee = (promptSubmissionPrice * PROTOCOL_FEE_BPS) / 10000;
+        uint256 collectionFee = promptSubmissionPrice - protocolFee;
+
+        if (address(paymentToken) != address(0)) {
+            paymentToken.safeTransferFrom(msg.sender, address(factory), protocolFee);
+            paymentToken.safeTransferFrom(msg.sender, address(this), collectionFee);
+        } else {
+            require(msg.value >= promptSubmissionPrice, "Insufficient payment");
+
+            (bool success1,) = payable(address(factory)).call{value: protocolFee}("");
+            require(success1, "Protocol fee transfer failed");
+
+            if (msg.value > promptSubmissionPrice) {
+                (bool success2,) = payable(msg.sender).call{value: msg.value - promptSubmissionPrice}("");
+                require(success2, "Excess ETH return failed");
+            }
+        }
+
         emit PromptSuggested(msg.sender, prompt);
     }
 
