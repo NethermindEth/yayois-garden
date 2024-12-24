@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/NethermindEth/yayois-garden/pkg/agent/art"
 	"github.com/NethermindEth/yayois-garden/pkg/agent/filestorage"
@@ -47,7 +48,8 @@ type Agent struct {
 	apiRouter    *gin.Engine
 	httpClient   *http.Client
 
-	rsaPrivateKey *rsa.PrivateKey
+	systemPromptCache *expirable.LRU[string, string]
+	rsaPrivateKey     *rsa.PrivateKey
 
 	factoryAddress  common.Address
 	pollingInterval time.Duration
@@ -73,6 +75,8 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 	if config == nil {
 		return nil, errors.New("config is nil")
 	}
+
+	systemPromptCache := expirable.NewLRU[string, string](1000, nil, 1*time.Hour)
 
 	rsaPrivateKey, err := rsa.GenerateKey(bytes.NewReader(config.PrivateKeySeed), 2048)
 	if err != nil {
@@ -110,7 +114,8 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		apiRouter:    nil,
 		httpClient:   config.HttpClient,
 
-		rsaPrivateKey: rsaPrivateKey,
+		systemPromptCache: systemPromptCache,
+		rsaPrivateKey:     rsaPrivateKey,
 
 		factoryAddress:  config.FactoryAddress,
 		pollingInterval: config.PollingInterval,
@@ -172,25 +177,30 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 		return
 	}
 
+	systemPrompt, ok := a.systemPromptCache.Get(event.Log.Address.Hex())
+	if !ok {
+		systemPromptUri, err := collection.SystemPromptUri(nil)
+		if err != nil {
+			slog.Error("failed to get system prompt uri", "error", err)
+			return
+		}
+
+		systemPrompt, err = a.readSystemPromptFromUri(ctx, systemPromptUri)
+		if err != nil {
+			slog.Error("failed to read system prompt", "error", err)
+			return
+		}
+
+		a.systemPromptCache.Add(event.Log.Address.Hex(), systemPrompt)
+	}
+
 	domain, err := collection.Eip712Domain(nil)
 	if err != nil {
 		slog.Error("failed to get eip712 domain", "error", err)
 		return
 	}
 
-	systemPromptUri, err := collection.SystemPromptUri(nil)
-	if err != nil {
-		slog.Error("failed to get system prompt uri", "error", err)
-		return
-	}
-
-	systemPrompt, err := a.readSystemPromptFromUri(ctx, systemPromptUri)
-	if err != nil {
-		slog.Error("failed to read system prompt", "error", err)
-		return
-	}
-
-	artUrl, err := a.artGenerator.GenerateUrl(ctx, event.Prompt, string(systemPrompt))
+	artUrl, err := a.artGenerator.GenerateUrl(ctx, event.Prompt, systemPrompt)
 	if err != nil {
 		slog.Error("failed to generate art", "error", err)
 		return
