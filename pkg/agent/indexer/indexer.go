@@ -9,21 +9,33 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	contractYayoiCollection "github.com/NethermindEth/yayois-garden/pkg/bindings/YayoiCollection"
 	contractYayoiFactory "github.com/NethermindEth/yayois-garden/pkg/bindings/YayoiFactory"
 )
 
 type Indexer struct {
-	rpcUrl          string
+	ethClient       IndexerEthClient
+	collectionCache *CollectionCache
+
 	contractAddress common.Address
 	pollingInterval time.Duration
+}
 
-	ethClient       *ethclient.Client
-	collectionCache *CollectionCache
+type IndexerEthClient interface {
+	bind.ContractBackend
+	ethereum.LogFilterer
+	ethereum.BlockNumberReader
+	ethereum.ChainIDReader
+}
+
+type IndexerOptions struct {
+	EthClient       IndexerEthClient
+	ContractAddress common.Address
+	PollingInterval time.Duration
 }
 
 type PromptSuggestion struct {
@@ -32,19 +44,8 @@ type PromptSuggestion struct {
 	Prompt string
 }
 
-type IndexerOptions struct {
-	RpcUrl          string
-	ContractAddress common.Address
-	PollingInterval time.Duration
-}
-
 func NewIndexer(opts IndexerOptions) (*Indexer, error) {
-	ethClient, err := ethclient.Dial(opts.RpcUrl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Ethereum client: %v", err)
-	}
-
-	factory, err := contractYayoiFactory.NewContractYayoiFactory(opts.ContractAddress, ethClient)
+	factory, err := contractYayoiFactory.NewContractYayoiFactory(opts.ContractAddress, opts.EthClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create factory: %v", err)
 	}
@@ -54,16 +55,11 @@ func NewIndexer(opts IndexerOptions) (*Indexer, error) {
 	}
 
 	return &Indexer{
-		rpcUrl:          opts.RpcUrl,
+		ethClient:       opts.EthClient,
 		contractAddress: opts.ContractAddress,
 		pollingInterval: opts.PollingInterval,
-		ethClient:       ethClient,
 		collectionCache: NewCollectionCache(factory),
 	}, nil
-}
-
-func (i *Indexer) GetRpcUrl() string {
-	return i.rpcUrl
 }
 
 func (i *Indexer) GetContractAddress() common.Address {

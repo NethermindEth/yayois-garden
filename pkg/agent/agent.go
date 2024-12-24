@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,9 +12,13 @@ import (
 	"time"
 
 	"github.com/Dstack-TEE/dstack/sdk/go/tappd"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/gin-gonic/gin"
 
 	"github.com/NethermindEth/yayois-garden/pkg/agent/art"
 	"github.com/NethermindEth/yayois-garden/pkg/agent/filestorage"
@@ -23,63 +29,110 @@ import (
 	contractYayoiCollection "github.com/NethermindEth/yayois-garden/pkg/bindings/YayoiCollection"
 )
 
-type Agent struct {
-	setupResult *setup.SetupResult
-
-	mu sync.Mutex
-
-	artGenerator art.ArtGenerator
-	indexer      *indexer.Indexer
-	ethClient    *ethclient.Client
-	wallet       *wallet.Wallet
-	nftUploader  *nft.NftUploader
-	tappdClient  *tappd.TappdClient
+type AgentEthClient interface {
+	bind.ContractBackend
+	ethereum.LogFilterer
+	ethereum.BlockNumberReader
+	ethereum.ChainIDReader
 }
 
-func NewAgent(ctx context.Context, setupResult *setup.SetupResult) (*Agent, error) {
-	artGenerator := art.NewOpenAiGenerator(setupResult.OpenAiApiKey, setupResult.OpenAiModel)
+type Agent struct {
+	artGenerator art.ArtGenerator
+	indexer      *indexer.Indexer
+	ethClient    AgentEthClient
+	wallet       *wallet.Wallet
+	nftUploader  *nft.NftUploader
+	tappdClient  TappdClient
+	apiRouter    *gin.Engine
+	httpClient   *http.Client
+
+	factoryAddress  common.Address
+	pollingInterval time.Duration
+	apiIpPort       string
+
+	mu sync.Mutex
+}
+
+type AgentConfig struct {
+	ArtGenerator art.ArtGenerator
+	Uploader     filestorage.Uploader
+	EthClient    AgentEthClient
+	TappdClient  TappdClient
+	HttpClient   *http.Client
+
+	FactoryAddress  common.Address
+	PollingInterval time.Duration
+	PrivateKeySeed  []byte
+	ApiIpPort       string
+}
+
+func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
+	if config == nil {
+		return nil, errors.New("config is nil")
+	}
 
 	indexer, err := indexer.NewIndexer(indexer.IndexerOptions{
-		RpcUrl:          setupResult.EthereumRpcUrl,
-		ContractAddress: setupResult.FactoryAddress,
-		PollingInterval: 5 * time.Second,
+		EthClient:       config.EthClient,
+		ContractAddress: config.FactoryAddress,
+		PollingInterval: config.PollingInterval,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create indexer: %w", err)
+	}
+
+	chainID, err := config.EthClient.ChainID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain id: %w", err)
+	}
+
+	wallet, err := wallet.NewWallet(config.PrivateKeySeed, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create wallet: %w", err)
+	}
+
+	nftUploader := nft.NewNftUploader(config.Uploader)
+
+	agent := &Agent{
+		artGenerator: config.ArtGenerator,
+		indexer:      indexer,
+		ethClient:    config.EthClient,
+		wallet:       wallet,
+		nftUploader:  nftUploader,
+		tappdClient:  config.TappdClient,
+		apiRouter:    nil,
+		httpClient:   config.HttpClient,
+
+		factoryAddress:  config.FactoryAddress,
+		pollingInterval: config.PollingInterval,
+		apiIpPort:       config.ApiIpPort,
+	}
+
+	agent.apiRouter = agent.generateRouter()
+
+	return agent, nil
+}
+
+func NewAgentConfigFromSetupResult(setupResult *setup.SetupResult) (*AgentConfig, error) {
+	if setupResult == nil {
+		return nil, errors.New("setup result is nil")
 	}
 
 	ethClient, err := ethclient.Dial(setupResult.EthereumRpcUrl)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to dial ethereum client: %w", err)
 	}
 
-	chainID, err := ethClient.ChainID(ctx)
-	if err != nil {
-		return nil, err
-	}
+	return &AgentConfig{
+		ArtGenerator:   art.NewOpenAiGenerator(setupResult.OpenAiApiKey, setupResult.OpenAiModel),
+		Uploader:       filestorage.NewPinataUploader(setupResult.PinataJwtKey),
+		EthClient:      ethClient,
+		TappdClient:    tappd.NewTappdClient(tappd.WithEndpoint(setupResult.DstackTappdEndpoint)),
+		FactoryAddress: setupResult.FactoryAddress,
+		HttpClient:     http.DefaultClient,
 
-	wallet, err := wallet.NewWallet(setupResult.PrivateKeySeed, chainID)
-	if err != nil {
-		return nil, err
-	}
-
-	nftUploader := nft.NewNftUploader(
-		filestorage.NewPinataUploader(setupResult.PinataJwtKey),
-	)
-
-	tappdClient := tappd.NewTappdClient(
-		tappd.WithEndpoint(setupResult.DstackTappdEndpoint),
-	)
-
-	return &Agent{
-		setupResult: setupResult,
-
-		artGenerator: artGenerator,
-		indexer:      indexer,
-		ethClient:    ethClient,
-		wallet:       wallet,
-		nftUploader:  nftUploader,
-		tappdClient:  tappdClient,
+		PollingInterval: 5 * time.Second,
+		PrivateKeySeed:  setupResult.PrivateKeySeed,
+		ApiIpPort:       setupResult.ApiIpPort,
 	}, nil
 }
 
@@ -166,7 +219,7 @@ func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
 		return "", err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -180,16 +233,14 @@ func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
 	return string(body), nil
 }
 
-func (a *Agent) quote(ctx context.Context) (string, error) {
-	reportDataBytes, err := generateReportDataBytes(a.wallet.Address(), a.setupResult.FactoryAddress)
-	if err != nil {
-		return "", err
-	}
+func (a *Agent) FactoryAddress() common.Address {
+	return a.factoryAddress
+}
 
-	quote, err := a.tappdClient.TdxQuote(ctx, reportDataBytes)
-	if err != nil {
-		return "", err
-	}
+func (a *Agent) PollingInterval() time.Duration {
+	return a.pollingInterval
+}
 
-	return quote.Quote, nil
+func (a *Agent) ApiIpPort() string {
+	return a.apiIpPort
 }
