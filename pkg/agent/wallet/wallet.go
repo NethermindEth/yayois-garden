@@ -44,3 +44,7 @@ func (w *Wallet) Address() common.Address {
 func (w *Wallet) Auth() *bind.TransactOpts {
 	return w.auth
 }
+
+func (w *Wallet) Seed() []byte {
+	return w.seed
+}

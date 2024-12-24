@@ -16,6 +16,10 @@ func (a *Agent) generateRouter() *gin.Engine {
 		c.String(http.StatusOK, a.Address().String())
 	})
 
+	router.GET("/pubkey", func(c *gin.Context) {
+		c.JSON(http.StatusOK, a.rsaPrivateKey.PublicKey)
+	})
+
 	router.GET("/quote", func(c *gin.Context) {
 		quote, err := a.Quote(c.Request.Context())
 		if err != nil {

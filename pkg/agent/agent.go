@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"io"
@@ -43,6 +45,8 @@ type Agent struct {
 	apiRouter    *gin.Engine
 	httpClient   *http.Client
 
+	rsaPrivateKey *rsa.PrivateKey
+
 	factoryAddress  common.Address
 	pollingInterval time.Duration
 	apiIpPort       string
@@ -66,6 +70,11 @@ type AgentConfig struct {
 func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 	if config == nil {
 		return nil, errors.New("config is nil")
+	}
+
+	rsaPrivateKey, err := rsa.GenerateKey(bytes.NewReader(config.PrivateKeySeed), 2048)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate rsa private key: %w", err)
 	}
 
 	indexer, err := indexer.NewIndexer(indexer.IndexerOptions{
@@ -98,6 +107,8 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		tappdClient:  config.TappdClient,
 		apiRouter:    nil,
 		httpClient:   config.HttpClient,
+
+		rsaPrivateKey: rsaPrivateKey,
 
 		factoryAddress:  config.FactoryAddress,
 		pollingInterval: config.PollingInterval,
