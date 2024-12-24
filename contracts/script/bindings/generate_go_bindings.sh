@@ -26,7 +26,7 @@ function create_binding {
     rm -f ${abi_file} ${bin_file}
 }
 
-project_dir=$(realpath ../../..)
+project_dir=$(realpath $(dirname $0)/../../..)
 
 create_binding $project_dir/contracts YayoiFactory $project_dir/pkg/bindings
 create_binding $project_dir/contracts YayoiCollection $project_dir/pkg/bindings

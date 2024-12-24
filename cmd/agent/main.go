@@ -17,7 +17,13 @@ func main() {
 		return
 	}
 
-	agent, err := agent.NewAgent(ctx, setupResult)
+	agentConfig, err := agent.NewAgentConfigFromSetupResult(setupResult)
+	if err != nil {
+		slog.Error("failed to create agent config", "error", err)
+		return
+	}
+
+	agent, err := agent.NewAgent(ctx, agentConfig)
 	if err != nil {
 		slog.Error("failed to create agent", "error", err)
 		return

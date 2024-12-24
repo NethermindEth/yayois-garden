@@ -59,7 +59,7 @@ contract YayoiFactoryTest is Test {
         assertEq(YayoiCollection(collection).owner(), user);
     }
 
-    function testFailCreateCollectionInsufficientPayment() public {
+    function testRevertIfInsufficientPayment() public {
         YayoiFactory.CreateCollectionParams memory params = YayoiFactory.CreateCollectionParams({
             name: "Test Collection",
             symbol: "TEST",
@@ -69,6 +69,7 @@ contract YayoiFactoryTest is Test {
         });
 
         vm.prank(user);
+        vm.expectRevert();
         factory.createCollection(params);
     }
 
@@ -80,8 +81,9 @@ contract YayoiFactoryTest is Test {
         assertFalse(factory.isAuthorizedSigner(signer));
     }
 
-    function testFailUpdateAuthorizedSignerUnauthorized() public {
+    function testRevertIfUnauthorizedUpdateSigner() public {
         vm.prank(user);
+        vm.expectRevert();
         factory.updateAuthorizedSigner(signer, true);
     }
 
@@ -91,8 +93,9 @@ contract YayoiFactoryTest is Test {
         assertEq(address(factory.collectionImpl()), newImpl);
     }
 
-    function testFailSetImplementationUnauthorized() public {
+    function testRevertIfUnauthorizedSetImplementation() public {
         vm.prank(user);
+        vm.expectRevert();
         factory.setImplementation(payable(address(1)));
     }
 
@@ -148,8 +151,9 @@ contract YayoiFactoryTest is Test {
         assertEq(paymentToken.balanceOf(address(factory)), 0);
     }
 
-    function testFailSweepTokensUnauthorized() public {
+    function testRevertIfUnauthorizedSweepTokens() public {
         vm.prank(user);
+        vm.expectRevert();
         factory.sweepTokens(address(paymentToken));
     }
 }

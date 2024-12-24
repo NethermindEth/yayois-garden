@@ -2,42 +2,61 @@ package wallet
 
 import (
 	"fmt"
+	"log/slog"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"github.com/ethersphere/bee/pkg/crypto/eip712"
+	beecrypto "github.com/ethersphere/bee/pkg/crypto"
 )
 
 var eip712Types = apitypes.Types{
+	"EIP712Domain": {
+		{Name: "name", Type: "string"},
+		{Name: "version", Type: "string"},
+		{Name: "chainId", Type: "uint256"},
+		{Name: "verifyingContract", Type: "address"},
+	},
 	"Mint": []apitypes.Type{
 		{Name: "to", Type: "address"},
 		{Name: "uri", Type: "string"},
 	},
 }
 
-func (w *Wallet) MintMessage(to common.Address, uri string, domain apitypes.TypedDataDomain) ([]byte, error) {
-	typedData, err := eip712.EncodeForSigning(&apitypes.TypedData{
+type EIP712Domain struct {
+	Name              string
+	Version           string
+	ChainId           *big.Int
+	VerifyingContract common.Address
+}
+
+func (w *Wallet) SignMintMessage(to common.Address, uri string, domain EIP712Domain) ([]byte, error) {
+	signer := beecrypto.NewDefaultSigner(w.privateKey)
+
+	address, err := signer.EthereumAddress()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ethereum address: %w", err)
+	}
+	slog.Info("signer", "signer", address.Hex())
+
+	signature, err := signer.SignTypedData(&apitypes.TypedData{
 		Types:       eip712Types,
 		PrimaryType: "Mint",
-		Domain:      domain,
+		Domain: apitypes.TypedDataDomain{
+			Name:              domain.Name,
+			Version:           domain.Version,
+			ChainId:           (*math.HexOrDecimal256)(domain.ChainId),
+			VerifyingContract: domain.VerifyingContract.Hex(),
+		},
 		Message: map[string]interface{}{
-			"to":  to,
+			"to":  to.Hex(),
 			"uri": uri,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode mint message: %w", err)
+		return nil, fmt.Errorf("failed to sign mint message: %w", err)
 	}
 
-	return typedData, nil
-}
-
-func (w *Wallet) SignMintMessage(to common.Address, uri string, domain apitypes.TypedDataDomain) ([]byte, error) {
-	message, err := w.MintMessage(to, uri, domain)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mint message: %w", err)
-	}
-
-	return crypto.Sign(message, w.privateKey)
+	return signature, nil
 }
