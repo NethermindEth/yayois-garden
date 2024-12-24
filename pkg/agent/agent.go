@@ -223,14 +223,30 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 }
 
 func (a *Agent) readSystemPromptFromUri(ctx context.Context, uri string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
+	headReq, err := http.NewRequestWithContext(ctx, http.MethodHead, uri, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create HEAD request: %w", err)
+	}
+
+	headResp, err := a.httpClient.Do(headReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to perform HEAD request: %w", err)
+	}
+	headResp.Body.Close()
+
+	if headResp.ContentLength >= 20480 {
+		slog.Info("System prompt too large, skipping")
+		return "", nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GET request: %w", err)
 	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to perform GET request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -239,9 +255,10 @@ func (a *Agent) readSystemPromptFromUri(ctx context.Context, uri string) (string
 		return "", err
 	}
 
+	// Attempt to decrypt body; if fail, fallback to raw body
 	decryptedBody, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, a.rsaPrivateKey, body, nil)
 	if err != nil {
-		slog.Warn("failed to decrypt body", "error", err)
+		slog.Warn("failed to decrypt body, using raw content", "error", err)
 		decryptedBody = body
 	}
 
