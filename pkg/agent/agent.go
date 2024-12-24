@@ -89,11 +89,17 @@ func (a *Agent) Start(ctx context.Context) error {
 	events := make(chan indexer.PromptSuggestion, 1000)
 	a.indexer.IndexEvents(ctx, events)
 
-	for event := range events {
-		go a.processEvent(ctx, event)
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil
+			}
+			go a.processEvent(ctx, event)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-
-	return nil
 }
 
 func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion) {
