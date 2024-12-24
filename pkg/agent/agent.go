@@ -3,7 +3,9 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -182,7 +184,7 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 		return
 	}
 
-	systemPrompt, err := a.readFromUri(ctx, systemPromptUri)
+	systemPrompt, err := a.readSystemPromptFromUri(ctx, systemPromptUri)
 	if err != nil {
 		slog.Error("failed to read system prompt", "error", err)
 		return
@@ -220,7 +222,7 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 	a.mu.Unlock()
 }
 
-func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
+func (a *Agent) readSystemPromptFromUri(ctx context.Context, uri string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return "", err
@@ -237,7 +239,13 @@ func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
 		return "", err
 	}
 
-	return string(body), nil
+	decryptedBody, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, a.rsaPrivateKey, body, nil)
+	if err != nil {
+		slog.Warn("failed to decrypt body", "error", err)
+		decryptedBody = body
+	}
+
+	return string(decryptedBody), nil
 }
 
 func (a *Agent) FactoryAddress() common.Address {
