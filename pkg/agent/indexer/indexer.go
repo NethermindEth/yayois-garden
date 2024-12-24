@@ -118,7 +118,6 @@ func (i *Indexer) watchPromptSuggestions(ctx context.Context, ch chan<- PromptSu
 					continue
 				}
 
-				slog.Warn("checking if collection is registered", "collection", promptSuggestedLog.Raw.Address)
 				isRegistered, err := i.collectionCache.IsCollectionRegistered(promptSuggestedLog.Raw.Address)
 				if err != nil {
 					slog.Warn("failed to check if collection is registered", "collection", promptSuggestedLog.Raw.Address, "error", err)
