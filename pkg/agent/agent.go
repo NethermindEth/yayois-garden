@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,9 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/gin-gonic/gin"
 
 	"github.com/NethermindEth/yayois-garden/pkg/agent/art"
@@ -192,12 +189,11 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 		return
 	}
 
-	signature, err := a.wallet.SignMintMessage(event.Sender, ipfsHash, apitypes.TypedDataDomain{
+	signature, err := a.wallet.SignMintMessage(event.Sender, ipfsHash, wallet.EIP712Domain{
 		Name:              domain.Name,
 		Version:           domain.Version,
-		ChainId:           (*math.HexOrDecimal256)(domain.ChainId),
-		VerifyingContract: domain.VerifyingContract.String(),
-		Salt:              "0x" + hex.EncodeToString(domain.Salt[:]),
+		ChainId:           domain.ChainId,
+		VerifyingContract: domain.VerifyingContract,
 	})
 	if err != nil {
 		slog.Error("failed to sign mint message", "error", err)
