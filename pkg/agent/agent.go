@@ -74,7 +74,7 @@ type AgentConfig struct {
 const (
 	systemPromptCacheSize = 1000
 	systemPromptCacheTTL  = 1 * time.Hour
-	systemPromptMaxSize   = 20480
+	systemPromptMaxSize   = 5000
 )
 
 func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
