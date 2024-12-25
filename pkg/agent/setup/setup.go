@@ -37,7 +37,11 @@ func Setup(ctx context.Context) (*SetupResult, error) {
 	setupResult, err := loadSetup(ctx, config)
 	if err != nil {
 		slog.Warn("failed to load setup, initializing new setup", "error", err)
-		return initializeSetup(ctx, config)
+
+		setupResult, err = initializeSetup(ctx, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize setup: %v", err)
+		}
 	}
 
 	if debug.IsDebugShowSetup() {
