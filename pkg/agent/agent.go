@@ -2,6 +2,9 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gin-gonic/gin"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/NethermindEth/yayois-garden/pkg/agent/art"
 	"github.com/NethermindEth/yayois-garden/pkg/agent/filestorage"
@@ -43,6 +47,9 @@ type Agent struct {
 	apiRouter    *gin.Engine
 	httpClient   *http.Client
 
+	systemPromptCache *expirable.LRU[string, string]
+	rsaPrivateKey     *rsa.PrivateKey
+
 	factoryAddress  common.Address
 	pollingInterval time.Duration
 	apiIpPort       string
@@ -57,16 +64,25 @@ type AgentConfig struct {
 	TappdClient  TappdClient
 	HttpClient   *http.Client
 
-	FactoryAddress  common.Address
-	PollingInterval time.Duration
-	PrivateKeySeed  []byte
-	ApiIpPort       string
+	FactoryAddress        common.Address
+	PollingInterval       time.Duration
+	AccountPrivateKeySeed []byte
+	ApiIpPort             string
+	RsaPrivateKey         *rsa.PrivateKey
 }
+
+const (
+	systemPromptCacheSize = 1000
+	systemPromptCacheTTL  = 1 * time.Hour
+	systemPromptMaxSize   = 5000
+)
 
 func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 	if config == nil {
 		return nil, errors.New("config is nil")
 	}
+
+	systemPromptCache := expirable.NewLRU[string, string](systemPromptCacheSize, nil, systemPromptCacheTTL)
 
 	indexer, err := indexer.NewIndexer(indexer.IndexerOptions{
 		EthClient:       config.EthClient,
@@ -82,7 +98,7 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		return nil, fmt.Errorf("failed to get chain id: %w", err)
 	}
 
-	wallet, err := wallet.NewWallet(config.PrivateKeySeed, chainID)
+	wallet, err := wallet.NewWallet(config.AccountPrivateKeySeed, chainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallet: %w", err)
 	}
@@ -98,6 +114,9 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		tappdClient:  config.TappdClient,
 		apiRouter:    nil,
 		httpClient:   config.HttpClient,
+
+		systemPromptCache: systemPromptCache,
+		rsaPrivateKey:     config.RsaPrivateKey,
 
 		factoryAddress:  config.FactoryAddress,
 		pollingInterval: config.PollingInterval,
@@ -127,9 +146,10 @@ func NewAgentConfigFromSetupResult(setupResult *setup.SetupResult) (*AgentConfig
 		FactoryAddress: setupResult.FactoryAddress,
 		HttpClient:     http.DefaultClient,
 
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  setupResult.PrivateKeySeed,
-		ApiIpPort:       setupResult.ApiIpPort,
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: setupResult.AccountPrivateKeySeed,
+		ApiIpPort:             setupResult.ApiIpPort,
+		RsaPrivateKey:         setupResult.RsaPrivateKey,
 	}, nil
 }
 
@@ -159,25 +179,30 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 		return
 	}
 
+	systemPrompt, ok := a.systemPromptCache.Get(event.Log.Address.Hex())
+	if !ok {
+		systemPromptUri, err := collection.SystemPromptUri(nil)
+		if err != nil {
+			slog.Error("failed to get system prompt uri", "error", err)
+			return
+		}
+
+		systemPrompt, err = a.readSystemPromptFromUri(ctx, systemPromptUri)
+		if err != nil {
+			slog.Error("failed to read system prompt", "error", err)
+			return
+		}
+
+		a.systemPromptCache.Add(event.Log.Address.Hex(), systemPrompt)
+	}
+
 	domain, err := collection.Eip712Domain(nil)
 	if err != nil {
 		slog.Error("failed to get eip712 domain", "error", err)
 		return
 	}
 
-	systemPromptUri, err := collection.SystemPromptUri(nil)
-	if err != nil {
-		slog.Error("failed to get system prompt uri", "error", err)
-		return
-	}
-
-	systemPrompt, err := a.readFromUri(ctx, systemPromptUri)
-	if err != nil {
-		slog.Error("failed to read system prompt", "error", err)
-		return
-	}
-
-	artUrl, err := a.artGenerator.GenerateUrl(ctx, event.Prompt, string(systemPrompt))
+	artUrl, err := a.artGenerator.GenerateUrl(ctx, event.Prompt, systemPrompt)
 	if err != nil {
 		slog.Error("failed to generate art", "error", err)
 		return
@@ -209,15 +234,31 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 	a.mu.Unlock()
 }
 
-func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
+func (a *Agent) readSystemPromptFromUri(ctx context.Context, uri string) (string, error) {
+	headReq, err := http.NewRequestWithContext(ctx, http.MethodHead, uri, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create HEAD request: %w", err)
+	}
+
+	headResp, err := a.httpClient.Do(headReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to perform HEAD request: %w", err)
+	}
+	headResp.Body.Close()
+
+	if headResp.ContentLength >= systemPromptMaxSize {
+		slog.Info("System prompt too large, skipping")
+		return "", nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GET request: %w", err)
 	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to perform GET request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -226,7 +267,14 @@ func (a *Agent) readFromUri(ctx context.Context, uri string) (string, error) {
 		return "", err
 	}
 
-	return string(body), nil
+	// Attempt to decrypt body; if fail, fallback to raw body
+	decryptedBody, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, a.rsaPrivateKey, body, nil)
+	if err != nil {
+		slog.Warn("failed to decrypt body, using raw content", "error", err)
+		decryptedBody = body
+	}
+
+	return string(decryptedBody), nil
 }
 
 func (a *Agent) FactoryAddress() common.Address {
@@ -239,4 +287,8 @@ func (a *Agent) PollingInterval() time.Duration {
 
 func (a *Agent) ApiIpPort() string {
 	return a.apiIpPort
+}
+
+func (a *Agent) RsaPublicKey() rsa.PublicKey {
+	return a.rsaPrivateKey.PublicKey
 }

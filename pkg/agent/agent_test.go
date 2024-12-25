@@ -3,6 +3,9 @@ package agent_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -26,6 +29,8 @@ import (
 	contractYayoiFactory "github.com/NethermindEth/yayois-garden/pkg/bindings/YayoiFactory"
 )
 
+var rsaPrivateKey, _ = rsa.GenerateKey(rand.Reader, 2048)
+
 var genesisAccount, _ = crypto.GenerateKey()
 var genesisAddress = crypto.PubkeyToAddress(genesisAccount.PublicKey)
 
@@ -37,8 +42,8 @@ var userAccount, _ = crypto.GenerateKey()
 var userAddress = crypto.PubkeyToAddress(userAccount.PublicKey)
 var userAuth, _ = bind.NewKeyedTransactorWithChainID(userAccount, big.NewInt(1337))
 
-var agentPrivateKeySeed = []byte("test-seed")
-var agentWallet, _ = wallet.NewWallet(agentPrivateKeySeed, big.NewInt(1337))
+var agentPrivateKeySeed = [2048]byte{}
+var agentWallet, _ = wallet.NewWallet(agentPrivateKeySeed[:], big.NewInt(1337))
 var agentAddress = agentWallet.Address()
 
 type mockArtGenerator struct {
@@ -98,14 +103,15 @@ func TestNewAgent(t *testing.T) {
 		{
 			name: "valid config",
 			agentConfig: &agent.AgentConfig{
-				ArtGenerator:    &mockArtGenerator{},
-				Uploader:        &mockUploader{},
-				EthClient:       mockEthClient,
-				TappdClient:     &mockTappdClient{},
-				FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-				PollingInterval: 5 * time.Second,
-				PrivateKeySeed:  agentPrivateKeySeed,
-				ApiIpPort:       "",
+				ArtGenerator:          &mockArtGenerator{},
+				Uploader:              &mockUploader{},
+				EthClient:             mockEthClient,
+				TappdClient:           &mockTappdClient{},
+				FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+				PollingInterval:       5 * time.Second,
+				AccountPrivateKeySeed: agentPrivateKeySeed[:],
+				RsaPrivateKey:         rsaPrivateKey,
+				ApiIpPort:             "",
 			},
 			wantErr: false,
 		},
@@ -134,14 +140,15 @@ func TestAgent_Start(t *testing.T) {
 	mockEthClient, _ := newMockEthClient()
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:    &mockArtGenerator{},
-		Uploader:        &mockUploader{},
-		EthClient:       mockEthClient,
-		TappdClient:     &mockTappdClient{},
-		FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  agentPrivateKeySeed,
-		ApiIpPort:       "",
+		ArtGenerator:          &mockArtGenerator{},
+		Uploader:              &mockUploader{},
+		EthClient:             mockEthClient,
+		TappdClient:           &mockTappdClient{},
+		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: agentPrivateKeySeed[:],
+		RsaPrivateKey:         rsaPrivateKey,
+		ApiIpPort:             "",
 	}
 
 	agent, err := agent.NewAgent(context.Background(), agentConfig)
@@ -178,14 +185,15 @@ func TestAgent_Quote(t *testing.T) {
 	}
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:    &mockArtGenerator{},
-		Uploader:        &mockUploader{},
-		EthClient:       mockEthClient,
-		TappdClient:     mockTappdClient,
-		FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  agentPrivateKeySeed,
-		ApiIpPort:       "",
+		ArtGenerator:          &mockArtGenerator{},
+		Uploader:              &mockUploader{},
+		EthClient:             mockEthClient,
+		TappdClient:           mockTappdClient,
+		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: agentPrivateKeySeed[:],
+		RsaPrivateKey:         rsaPrivateKey,
+		ApiIpPort:             "",
 	}
 
 	a, err = agent.NewAgent(context.Background(), agentConfig)
@@ -197,137 +205,269 @@ func TestAgent_Quote(t *testing.T) {
 }
 
 func TestAgent_MainFlow(t *testing.T) {
-	mockEthClient, simBackend := newMockEthClient()
+	t.Run("plain text system prompt", func(t *testing.T) {
+		mockEthClient, simBackend := newMockEthClient()
 
-	factoryAddr, tx, factoryInstance, err := contractYayoiFactory.DeployContractYayoiFactory(
-		ownerAuth,
-		mockEthClient,
-		common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		big.NewInt(10),
-		ownerAddress,
-	)
-	require.NoError(t, err)
-	simBackend.Commit()
+		factoryAddr, tx, factoryInstance, err := contractYayoiFactory.DeployContractYayoiFactory(
+			ownerAuth,
+			mockEthClient,
+			common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			big.NewInt(10),
+			ownerAddress,
+		)
+		require.NoError(t, err)
+		simBackend.Commit()
 
-	require.NotEqual(t, factoryAddr, common.Address{}, "Factory address should not be zero")
-	require.NotNil(t, factoryInstance, "Factory instance should not be nil")
-	require.NotNil(t, tx, "Should have a valid deploy transaction")
+		require.NotEqual(t, factoryAddr, common.Address{}, "Factory address should not be zero")
+		require.NotNil(t, factoryInstance, "Factory instance should not be nil")
+		require.NotNil(t, tx, "Should have a valid deploy transaction")
 
-	tx2, err := factoryInstance.UpdateAuthorizedSigner(ownerAuth, agentAddress, true)
-	require.NoError(t, err)
-	simBackend.Commit()
-	require.NotNil(t, tx2, "Should have a valid transaction updating the authorized signer")
+		tx2, err := factoryInstance.UpdateAuthorizedSigner(ownerAuth, agentAddress, true)
+		require.NoError(t, err)
+		simBackend.Commit()
+		require.NotNil(t, tx2, "Should have a valid transaction updating the authorized signer")
 
-	tx2Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx2)
-	require.NoError(t, err)
-	require.NotNil(t, tx2Receipt, "Should have a valid transaction receipt")
+		tx2Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx2)
+		require.NoError(t, err)
+		require.NotNil(t, tx2Receipt, "Should have a valid transaction receipt")
 
-	systemPrompt := "test system prompt"
-	systemPromptUri := "ipfs://demo"
-	userPrompt := "test user prompt"
-	artUri := "test-art-uri"
-	uploadedArtUri := "test-uploaded-art-uri"
-	uploadedJsonUri := "test-uploaded-json-uri"
-	collectionName := "test-collection-name"
-	collectionSymbol := "TEST"
+		systemPrompt := "test system prompt"
+		systemPromptUri := "ipfs://demo"
+		userPrompt := "test user prompt"
+		artUri := "test-art-uri"
+		uploadedArtUri := "test-uploaded-art-uri"
+		uploadedJsonUri := "test-uploaded-json-uri"
+		collectionName := "test-collection-name"
+		collectionSymbol := "TEST"
 
-	mockHttpClient := &http.Client{
-		Transport: &mockHttpTransport{
-			roundTrip: func(req *http.Request) (*http.Response, error) {
-				if req.URL.String() == systemPromptUri {
-					return &http.Response{
-						StatusCode: http.StatusOK,
-						Body:       io.NopCloser(bytes.NewBufferString(systemPrompt)),
-					}, nil
-				}
-				return nil, fmt.Errorf("unexpected request to %s", req.URL)
-			},
-		},
-	}
-
-	tx3Params := *ownerAuth
-	tx3Params.Value = big.NewInt(10)
-
-	tx3, err := factoryInstance.CreateCollection(&tx3Params, contractYayoiFactory.YayoiFactoryCreateCollectionParams{
-		Name:                  collectionName,
-		Symbol:                collectionSymbol,
-		SystemPromptUri:       systemPromptUri,
-		PaymentToken:          common.Address{},
-		PromptSubmissionPrice: big.NewInt(20),
-	})
-	require.NoError(t, err)
-	simBackend.Commit()
-	require.NotNil(t, tx2, "Should have a valid transaction creating a collection")
-
-	tx3Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx3)
-	require.NoError(t, err)
-	require.NotNil(t, tx3Receipt, "Should have a valid transaction receipt")
-
-	testAgent := setupTestAgent(t, func(config *agent.AgentConfig) {
-		config.EthClient = mockEthClient
-		config.HttpClient = mockHttpClient
-		config.FactoryAddress = factoryAddr
-		config.PollingInterval = 1 * time.Second
-		config.ArtGenerator = &mockArtGenerator{
-			generateUrl: func(ctx context.Context, prompt string, systemPrompt string) (string, error) {
-				require.Equal(t, prompt, userPrompt)
-				require.Equal(t, systemPrompt, systemPrompt)
-
-				return artUri, nil
+		mockHttpClient := &http.Client{
+			Transport: &mockHttpTransport{
+				roundTrip: func(req *http.Request) (*http.Response, error) {
+					if req.URL.String() == systemPromptUri {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewBufferString(systemPrompt)),
+						}, nil
+					}
+					return nil, fmt.Errorf("unexpected request to %s", req.URL)
+				},
 			},
 		}
-		config.Uploader = &mockUploader{
-			uploadUrl: func(ctx context.Context, url string) (string, error) {
-				require.Equal(t, url, artUri)
 
-				return uploadedArtUri, nil
-			},
-			uploadJson: func(ctx context.Context, json interface{}) (string, error) {
-				require.Equal(t, json, map[string]string{
-					"name":        collectionName,
-					"description": userPrompt,
-					"image":       uploadedArtUri,
-				})
+		tx3Params := *ownerAuth
+		tx3Params.Value = big.NewInt(10)
 
-				return uploadedJsonUri, nil
-			},
-		}
+		tx3, err := factoryInstance.CreateCollection(&tx3Params, contractYayoiFactory.YayoiFactoryCreateCollectionParams{
+			Name:                  collectionName,
+			Symbol:                collectionSymbol,
+			SystemPromptUri:       systemPromptUri,
+			PaymentToken:          common.Address{},
+			PromptSubmissionPrice: big.NewInt(20),
+		})
+		require.NoError(t, err)
+		simBackend.Commit()
+		require.NotNil(t, tx3, "Should have a valid transaction creating a collection")
+
+		tx3Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx3)
+		require.NoError(t, err)
+		require.NotNil(t, tx3Receipt, "Should have a valid transaction receipt")
+
+		testAgent := setupTestAgent(t, func(config *agent.AgentConfig) {
+			config.EthClient = mockEthClient
+			config.HttpClient = mockHttpClient
+			config.FactoryAddress = factoryAddr
+			config.PollingInterval = 1 * time.Second
+			config.ArtGenerator = &mockArtGenerator{
+				generateUrl: func(ctx context.Context, prompt string, systemPrompt string) (string, error) {
+					require.Equal(t, prompt, userPrompt)
+					require.Equal(t, systemPrompt, systemPrompt)
+					return artUri, nil
+				},
+			}
+			config.Uploader = &mockUploader{
+				uploadUrl: func(ctx context.Context, url string) (string, error) {
+					require.Equal(t, url, artUri)
+					return uploadedArtUri, nil
+				},
+				uploadJson: func(ctx context.Context, json interface{}) (string, error) {
+					require.Equal(t, json, map[string]string{
+						"name":        collectionName,
+						"description": userPrompt,
+						"image":       uploadedArtUri,
+					})
+					return uploadedJsonUri, nil
+				},
+			}
+		})
+
+		agentCtx, agentCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		go func() {
+			err := testAgent.Start(agentCtx)
+			require.Error(t, err, context.DeadlineExceeded)
+		}()
+
+		collectionAddr, err := factoryInstance.GetCollectionFromSystemPromptUri(nil, systemPromptUri)
+		require.NoError(t, err)
+		require.NotEqual(t, collectionAddr, common.Address{})
+
+		collectionInstance, err := contractYayoiCollection.NewContractYayoiCollection(collectionAddr, mockEthClient)
+		require.NoError(t, err)
+		require.NotNil(t, collectionInstance)
+
+		tx4Params := *userAuth
+		tx4Params.Value = big.NewInt(20)
+
+		tx4, err := collectionInstance.SuggestPrompt(&tx4Params, userPrompt)
+		require.NoError(t, err)
+		simBackend.Commit()
+		require.NotNil(t, tx4, "Should have a valid transaction suggesting a prompt")
+
+		tx4Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx4)
+		require.NoError(t, err)
+		require.NotNil(t, tx4Receipt, "Should have a valid transaction receipt")
+
+		<-agentCtx.Done()
+		agentCancel()
+
+		simBackend.Commit()
+
+		token0, err := collectionInstance.TokenURI(nil, big.NewInt(0))
+		require.NoError(t, err)
+		require.Equal(t, token0, uploadedJsonUri)
 	})
 
-	agentCtx, agentCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	go func() {
-		err := testAgent.Start(agentCtx)
-		require.Error(t, err, context.DeadlineExceeded)
-	}()
+	t.Run("encrypted system prompt", func(t *testing.T) {
+		mockEthClient, simBackend := newMockEthClient()
 
-	collectionAddr, err := factoryInstance.GetCollectionFromSystemPromptUri(nil, systemPromptUri)
-	require.NoError(t, err)
-	require.NotEqual(t, collectionAddr, common.Address{})
+		// Deploy a new factory
+		factoryAddr, tx, factoryInstance, err := contractYayoiFactory.DeployContractYayoiFactory(
+			ownerAuth,
+			mockEthClient,
+			common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			big.NewInt(10),
+			ownerAddress,
+		)
+		require.NoError(t, err)
+		simBackend.Commit()
 
-	collectionInstance, err := contractYayoiCollection.NewContractYayoiCollection(collectionAddr, mockEthClient)
-	require.NoError(t, err)
-	require.NotNil(t, collectionInstance)
+		require.NotEqual(t, factoryAddr, common.Address{}, "Factory address should not be zero")
+		require.NotNil(t, factoryInstance, "Factory instance should not be nil")
+		require.NotNil(t, tx, "Should have a valid deploy transaction")
 
-	tx4Params := *userAuth
-	tx4Params.Value = big.NewInt(20)
+		// Authorize the agent
+		tx2, err := factoryInstance.UpdateAuthorizedSigner(ownerAuth, agentAddress, true)
+		require.NoError(t, err)
+		simBackend.Commit()
+		require.NotNil(t, tx2, "Should have a valid transaction updating the authorized signer")
 
-	tx4, err := collectionInstance.SuggestPrompt(&tx4Params, userPrompt)
-	require.NoError(t, err)
-	simBackend.Commit()
-	require.NotNil(t, tx4, "Should have a valid transaction suggesting a prompt")
+		tx2Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx2)
+		require.NoError(t, err)
+		require.NotNil(t, tx2Receipt, "Should have a valid transaction receipt")
 
-	tx4Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx4)
-	require.NoError(t, err)
-	require.NotNil(t, tx4Receipt, "Should have a valid transaction receipt")
+		systemPromptDecrypted := "test system prompt (decrypted)"
+		systemPromptUri := "ipfs://demo-encrypted"
+		userPrompt := "test user prompt"
+		artUri := "test-art-uri"
+		uploadedArtUri := "test-uploaded-art-uri"
+		uploadedJsonUri := "test-uploaded-json-uri"
+		collectionName := "test-collection-name-encrypted"
+		collectionSymbol := "TESTE"
 
-	<-agentCtx.Done()
-	agentCancel()
+		systemPromptEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &rsaPrivateKey.PublicKey, []byte(systemPromptDecrypted), nil)
+		require.NoError(t, err)
 
-	simBackend.Commit()
+		mockHttpClient := &http.Client{
+			Transport: &mockHttpTransport{
+				roundTrip: func(req *http.Request) (*http.Response, error) {
+					if req.URL.String() == systemPromptUri {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewBuffer(systemPromptEncrypted)),
+						}, nil
+					}
+					return nil, fmt.Errorf("unexpected request to %s", req.URL)
+				},
+			},
+		}
 
-	token0, err := collectionInstance.TokenURI(nil, big.NewInt(0))
-	require.NoError(t, err)
-	require.Equal(t, token0, uploadedJsonUri)
+		tx3Params := *ownerAuth
+		tx3Params.Value = big.NewInt(10)
+		tx3, err := factoryInstance.CreateCollection(&tx3Params, contractYayoiFactory.YayoiFactoryCreateCollectionParams{
+			Name:                  collectionName,
+			Symbol:                collectionSymbol,
+			SystemPromptUri:       systemPromptUri,
+			PaymentToken:          common.Address{},
+			PromptSubmissionPrice: big.NewInt(20),
+		})
+		require.NoError(t, err)
+		simBackend.Commit()
+		require.NotNil(t, tx3, "Should have a valid transaction creating a collection")
+
+		tx3Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx3)
+		require.NoError(t, err)
+		require.NotNil(t, tx3Receipt, "Should have a valid transaction receipt")
+
+		testAgent := setupTestAgent(t, func(config *agent.AgentConfig) {
+			config.EthClient = mockEthClient
+			config.HttpClient = mockHttpClient
+			config.FactoryAddress = factoryAddr
+			config.PollingInterval = 1 * time.Second
+			config.ArtGenerator = &mockArtGenerator{
+				generateUrl: func(ctx context.Context, prompt string, systemPrompt string) (string, error) {
+					require.Equal(t, prompt, userPrompt)
+					require.Equal(t, systemPromptDecrypted, systemPrompt)
+					return artUri, nil
+				},
+			}
+			config.Uploader = &mockUploader{
+				uploadUrl: func(ctx context.Context, url string) (string, error) {
+					require.Equal(t, url, artUri)
+					return uploadedArtUri, nil
+				},
+				uploadJson: func(ctx context.Context, json interface{}) (string, error) {
+					require.Equal(t, json, map[string]string{
+						"name":        collectionName,
+						"description": userPrompt,
+						"image":       uploadedArtUri,
+					})
+					return uploadedJsonUri, nil
+				},
+			}
+		})
+
+		agentCtx, agentCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		go func() {
+			err := testAgent.Start(agentCtx)
+			require.Error(t, err, context.DeadlineExceeded)
+		}()
+
+		collectionAddr, err := factoryInstance.GetCollectionFromSystemPromptUri(nil, systemPromptUri)
+		require.NoError(t, err)
+		require.NotEqual(t, collectionAddr, common.Address{})
+
+		collectionInstance, err := contractYayoiCollection.NewContractYayoiCollection(collectionAddr, mockEthClient)
+		require.NoError(t, err)
+		require.NotNil(t, collectionInstance)
+
+		tx4Params := *userAuth
+		tx4Params.Value = big.NewInt(20)
+		tx4, err := collectionInstance.SuggestPrompt(&tx4Params, userPrompt)
+		require.NoError(t, err)
+		simBackend.Commit()
+		require.NotNil(t, tx4, "Should have a valid transaction suggesting a prompt")
+
+		tx4Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx4)
+		require.NoError(t, err)
+		require.NotNil(t, tx4Receipt, "Should have a valid transaction receipt")
+
+		<-agentCtx.Done()
+		agentCancel()
+		simBackend.Commit()
+
+		token0, err := collectionInstance.TokenURI(nil, big.NewInt(0))
+		require.NoError(t, err)
+		require.Equal(t, token0, uploadedJsonUri)
+	})
 }
 
 type mockHttpTransport struct {
