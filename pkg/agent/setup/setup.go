@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,15 +16,16 @@ import (
 )
 
 type SetupResult struct {
-	DstackTappdEndpoint string
-	EthereumRpcUrl      string
-	FactoryAddress      common.Address
-	SecureFile          string
-	OpenAiApiKey        string
-	OpenAiModel         string
-	PinataJwtKey        string
-	ApiIpPort           string
-	PrivateKeySeed      []byte
+	DstackTappdEndpoint   string
+	EthereumRpcUrl        string
+	FactoryAddress        common.Address
+	SecureFile            string
+	OpenAiApiKey          string
+	OpenAiModel           string
+	PinataJwtKey          string
+	ApiIpPort             string
+	AccountPrivateKeySeed []byte
+	RsaPrivateKey         *rsa.PrivateKey
 }
 
 func Setup(ctx context.Context) (*SetupResult, error) {
@@ -46,21 +48,27 @@ func Setup(ctx context.Context) (*SetupResult, error) {
 }
 
 func generateSetup(config *Config) (*SetupResult, error) {
-	privateKeySeed := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, privateKeySeed); err != nil {
+	accountPrivateKeySeed := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, accountPrivateKeySeed); err != nil {
 		return nil, fmt.Errorf("failed to generate private key seed: %v", err)
 	}
 
+	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate rsa private key: %w", err)
+	}
+
 	return &SetupResult{
-		DstackTappdEndpoint: config.DstackTappdEndpoint,
-		EthereumRpcUrl:      config.EthereumRpcUrl,
-		FactoryAddress:      common.HexToAddress(config.FactoryAddress),
-		SecureFile:          config.SecureFile,
-		OpenAiApiKey:        config.OpenAiApiKey,
-		OpenAiModel:         config.OpenAiModel,
-		PinataJwtKey:        config.PinataJwtKey,
-		ApiIpPort:           config.ApiIpPort,
-		PrivateKeySeed:      privateKeySeed,
+		DstackTappdEndpoint:   config.DstackTappdEndpoint,
+		EthereumRpcUrl:        config.EthereumRpcUrl,
+		FactoryAddress:        common.HexToAddress(config.FactoryAddress),
+		SecureFile:            config.SecureFile,
+		OpenAiApiKey:          config.OpenAiApiKey,
+		OpenAiModel:           config.OpenAiModel,
+		PinataJwtKey:          config.PinataJwtKey,
+		ApiIpPort:             config.ApiIpPort,
+		AccountPrivateKeySeed: accountPrivateKeySeed,
+		RsaPrivateKey:         rsaPrivateKey,
 	}, nil
 }
 

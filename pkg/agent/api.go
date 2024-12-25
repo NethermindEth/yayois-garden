@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,11 @@ func (a *Agent) generateRouter() *gin.Engine {
 	})
 
 	router.GET("/pubkey", func(c *gin.Context) {
-		c.JSON(http.StatusOK, a.rsaPrivateKey.PublicKey)
+		pubKey := a.RsaPublicKey()
+		c.JSON(http.StatusOK, map[string]string{
+			"n": pubKey.N.String(),
+			"e": strconv.Itoa(pubKey.E),
+		})
 	})
 
 	router.GET("/quote", func(c *gin.Context) {

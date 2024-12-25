@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -20,14 +21,15 @@ func setupTestAgent(t *testing.T, opts ...func(*agent.AgentConfig)) *agent.Agent
 	mockEthClient, _ := newMockEthClient()
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:    &mockArtGenerator{},
-		Uploader:        &mockUploader{},
-		EthClient:       mockEthClient,
-		TappdClient:     &mockTappdClient{},
-		FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  []byte("test-seed"),
-		ApiIpPort:       "",
+		ArtGenerator:          &mockArtGenerator{},
+		Uploader:              &mockUploader{},
+		EthClient:             mockEthClient,
+		TappdClient:           &mockTappdClient{},
+		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: agentPrivateKeySeed[:],
+		RsaPrivateKey:         rsaPrivateKey,
+		ApiIpPort:             "",
 	}
 
 	for _, opt := range opts {
@@ -90,5 +92,20 @@ func TestAgentApi_GetRouter(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Equal(t, assert.AnError.Error(), w.Body.String())
+	})
+
+	t.Run("GET /pubkey", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/pubkey", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var pubKey map[string]string
+		err := json.NewDecoder(w.Body).Decode(&pubKey)
+		assert.NoError(t, err)
+
+		assert.Equal(t, rsaPrivateKey.PublicKey.N.String(), pubKey["n"])
+		assert.Equal(t, strconv.Itoa(rsaPrivateKey.PublicKey.E), pubKey["e"])
 	})
 }

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -65,10 +64,11 @@ type AgentConfig struct {
 	TappdClient  TappdClient
 	HttpClient   *http.Client
 
-	FactoryAddress  common.Address
-	PollingInterval time.Duration
-	PrivateKeySeed  []byte
-	ApiIpPort       string
+	FactoryAddress        common.Address
+	PollingInterval       time.Duration
+	AccountPrivateKeySeed []byte
+	ApiIpPort             string
+	RsaPrivateKey         *rsa.PrivateKey
 }
 
 func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
@@ -77,11 +77,6 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 	}
 
 	systemPromptCache := expirable.NewLRU[string, string](1000, nil, 1*time.Hour)
-
-	rsaPrivateKey, err := rsa.GenerateKey(bytes.NewReader(config.PrivateKeySeed), 2048)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate rsa private key: %w", err)
-	}
 
 	indexer, err := indexer.NewIndexer(indexer.IndexerOptions{
 		EthClient:       config.EthClient,
@@ -97,7 +92,7 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		return nil, fmt.Errorf("failed to get chain id: %w", err)
 	}
 
-	wallet, err := wallet.NewWallet(config.PrivateKeySeed, chainID)
+	wallet, err := wallet.NewWallet(config.AccountPrivateKeySeed, chainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallet: %w", err)
 	}
@@ -115,7 +110,7 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		httpClient:   config.HttpClient,
 
 		systemPromptCache: systemPromptCache,
-		rsaPrivateKey:     rsaPrivateKey,
+		rsaPrivateKey:     config.RsaPrivateKey,
 
 		factoryAddress:  config.FactoryAddress,
 		pollingInterval: config.PollingInterval,
@@ -145,9 +140,10 @@ func NewAgentConfigFromSetupResult(setupResult *setup.SetupResult) (*AgentConfig
 		FactoryAddress: setupResult.FactoryAddress,
 		HttpClient:     http.DefaultClient,
 
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  setupResult.PrivateKeySeed,
-		ApiIpPort:       setupResult.ApiIpPort,
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: setupResult.AccountPrivateKeySeed,
+		ApiIpPort:             setupResult.ApiIpPort,
+		RsaPrivateKey:         setupResult.RsaPrivateKey,
 	}, nil
 }
 
@@ -285,4 +281,8 @@ func (a *Agent) PollingInterval() time.Duration {
 
 func (a *Agent) ApiIpPort() string {
 	return a.apiIpPort
+}
+
+func (a *Agent) RsaPublicKey() rsa.PublicKey {
+	return a.rsaPrivateKey.PublicKey
 }

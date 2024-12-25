@@ -3,6 +3,8 @@ package agent_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -26,6 +28,8 @@ import (
 	contractYayoiFactory "github.com/NethermindEth/yayois-garden/pkg/bindings/YayoiFactory"
 )
 
+var rsaPrivateKey, _ = rsa.GenerateKey(rand.Reader, 2048)
+
 var genesisAccount, _ = crypto.GenerateKey()
 var genesisAddress = crypto.PubkeyToAddress(genesisAccount.PublicKey)
 
@@ -37,8 +41,8 @@ var userAccount, _ = crypto.GenerateKey()
 var userAddress = crypto.PubkeyToAddress(userAccount.PublicKey)
 var userAuth, _ = bind.NewKeyedTransactorWithChainID(userAccount, big.NewInt(1337))
 
-var agentPrivateKeySeed = []byte("test-seed")
-var agentWallet, _ = wallet.NewWallet(agentPrivateKeySeed, big.NewInt(1337))
+var agentPrivateKeySeed = [2048]byte{}
+var agentWallet, _ = wallet.NewWallet(agentPrivateKeySeed[:], big.NewInt(1337))
 var agentAddress = agentWallet.Address()
 
 type mockArtGenerator struct {
@@ -98,14 +102,15 @@ func TestNewAgent(t *testing.T) {
 		{
 			name: "valid config",
 			agentConfig: &agent.AgentConfig{
-				ArtGenerator:    &mockArtGenerator{},
-				Uploader:        &mockUploader{},
-				EthClient:       mockEthClient,
-				TappdClient:     &mockTappdClient{},
-				FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-				PollingInterval: 5 * time.Second,
-				PrivateKeySeed:  agentPrivateKeySeed,
-				ApiIpPort:       "",
+				ArtGenerator:          &mockArtGenerator{},
+				Uploader:              &mockUploader{},
+				EthClient:             mockEthClient,
+				TappdClient:           &mockTappdClient{},
+				FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+				PollingInterval:       5 * time.Second,
+				AccountPrivateKeySeed: agentPrivateKeySeed[:],
+				RsaPrivateKey:         rsaPrivateKey,
+				ApiIpPort:             "",
 			},
 			wantErr: false,
 		},
@@ -134,14 +139,15 @@ func TestAgent_Start(t *testing.T) {
 	mockEthClient, _ := newMockEthClient()
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:    &mockArtGenerator{},
-		Uploader:        &mockUploader{},
-		EthClient:       mockEthClient,
-		TappdClient:     &mockTappdClient{},
-		FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  agentPrivateKeySeed,
-		ApiIpPort:       "",
+		ArtGenerator:          &mockArtGenerator{},
+		Uploader:              &mockUploader{},
+		EthClient:             mockEthClient,
+		TappdClient:           &mockTappdClient{},
+		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: agentPrivateKeySeed[:],
+		RsaPrivateKey:         rsaPrivateKey,
+		ApiIpPort:             "",
 	}
 
 	agent, err := agent.NewAgent(context.Background(), agentConfig)
@@ -178,14 +184,15 @@ func TestAgent_Quote(t *testing.T) {
 	}
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:    &mockArtGenerator{},
-		Uploader:        &mockUploader{},
-		EthClient:       mockEthClient,
-		TappdClient:     mockTappdClient,
-		FactoryAddress:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval: 5 * time.Second,
-		PrivateKeySeed:  agentPrivateKeySeed,
-		ApiIpPort:       "",
+		ArtGenerator:          &mockArtGenerator{},
+		Uploader:              &mockUploader{},
+		EthClient:             mockEthClient,
+		TappdClient:           mockTappdClient,
+		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		PollingInterval:       5 * time.Second,
+		AccountPrivateKeySeed: agentPrivateKeySeed[:],
+		RsaPrivateKey:         rsaPrivateKey,
+		ApiIpPort:             "",
 	}
 
 	a, err = agent.NewAgent(context.Background(), agentConfig)
