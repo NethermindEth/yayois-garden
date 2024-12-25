@@ -71,12 +71,18 @@ type AgentConfig struct {
 	RsaPrivateKey         *rsa.PrivateKey
 }
 
+const (
+	systemPromptCacheSize = 1000
+	systemPromptCacheTTL  = 1 * time.Hour
+	systemPromptMaxSize   = 20480
+)
+
 func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 	if config == nil {
 		return nil, errors.New("config is nil")
 	}
 
-	systemPromptCache := expirable.NewLRU[string, string](1000, nil, 1*time.Hour)
+	systemPromptCache := expirable.NewLRU[string, string](systemPromptCacheSize, nil, systemPromptCacheTTL)
 
 	indexer, err := indexer.NewIndexer(indexer.IndexerOptions{
 		EthClient:       config.EthClient,
@@ -240,7 +246,7 @@ func (a *Agent) readSystemPromptFromUri(ctx context.Context, uri string) (string
 	}
 	headResp.Body.Close()
 
-	if headResp.ContentLength >= 20480 {
+	if headResp.ContentLength >= systemPromptMaxSize {
 		slog.Info("System prompt too large, skipping")
 		return "", nil
 	}
