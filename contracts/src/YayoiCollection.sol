@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC5267.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import "./YayoiFactory.sol";
 
@@ -23,6 +24,7 @@ contract YayoiCollection is
     Initializable,
     ERC721URIStorageUpgradeable,
     OwnableUpgradeable,
+    PausableUpgradeable,
     IERC5267,
     EIP712Upgradeable
 {
@@ -150,6 +152,7 @@ contract YayoiCollection is
         __ERC721URIStorage_init();
         __Ownable_init(params.owner);
         __EIP712_init(params.name, "1");
+        __Pausable_init();
 
         factory = YayoiFactory(payable(params.factory));
         systemPromptUri = params.systemPromptUri;
@@ -197,12 +200,13 @@ contract YayoiCollection is
     }
 
     /**
-     * @notice Suggests a prompt and starts an auction
+     * @notice Suggests a prompt and starts an auction. Can only be called
+     * when the contract is not paused.
      * @param auctionId The auction ID to submit for
      * @param prompt The prompt text to suggest
      * @param bid Bid amount
      */
-    function suggestPrompt(uint256 auctionId, string memory prompt, uint256 bid) external payable {
+    function suggestPrompt(uint256 auctionId, string memory prompt, uint256 bid) external payable whenNotPaused {
         require(auctionId == getCurrentAuctionId(), "Invalid auction ID");
         require(bid >= minimumBidPrice, "Bid too low");
 
@@ -296,6 +300,13 @@ contract YayoiCollection is
      */
     function sweepTokens(address token) external onlyOwner {
         _withdrawAll(token, msg.sender);
+    }
+
+    /**
+     * @notice Pauses the contract
+     */
+    function pause() external onlyOwner {
+        _pause();
     }
 
     /**

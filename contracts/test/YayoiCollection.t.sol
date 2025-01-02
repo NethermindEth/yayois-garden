@@ -194,4 +194,26 @@ contract YayoiCollectionTest is Test {
         vm.expectRevert();
         collection.sweepTokens(address(paymentToken));
     }
+
+    function testPause() public {
+        collection.pause();
+        assertTrue(collection.paused());
+    }
+
+    function testRevertIfUnauthorizedPause() public {
+        vm.prank(user);
+        vm.expectRevert();
+        collection.pause();
+    }
+
+    function testRevertIfPausedSuggestPrompt() public {
+        collection.pause();
+
+        vm.startPrank(user);
+        paymentToken.approve(address(collection), MIN_BID_PRICE);
+        
+        vm.expectRevert("Pausable: paused");
+        collection.suggestPrompt(collection.getCurrentAuctionId(), "Test prompt", MIN_BID_PRICE);
+        vm.stopPrank();
+    }
 }
