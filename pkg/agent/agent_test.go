@@ -80,8 +80,8 @@ func (m *mockTappdClient) DeriveKeyWithSubject(ctx context.Context, path string,
 	return m.deriveKeyWithSubject(ctx, path, subject)
 }
 
-func newMockEthClient() (agent.AgentEthClient, *simulated.Backend) {
-	mockClient := simulated.NewBackend(
+func newMockEthClient() (agent.AgentEthClient, *simulated.Backend, *mockAgentClock) {
+	mockBackend := simulated.NewBackend(
 		types.GenesisAlloc{
 			genesisAddress: {Balance: big.NewInt(1000000000000000000)},
 			ownerAddress:   {Balance: big.NewInt(1000000000000000000)},
@@ -89,11 +89,27 @@ func newMockEthClient() (agent.AgentEthClient, *simulated.Backend) {
 			agentAddress:   {Balance: big.NewInt(1000000000000000000)},
 		},
 	)
-	return mockClient.Client(), mockClient
+	return mockBackend.Client(), mockBackend, &mockAgentClock{backend: mockBackend}
+}
+
+type mockAgentClock struct {
+	backend *simulated.Backend
+}
+
+func (m *mockAgentClock) Now() time.Time {
+	blockNumber, err := m.backend.Client().BlockNumber(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	block, err := m.backend.Client().BlockByNumber(context.Background(), big.NewInt(int64(blockNumber)))
+	if err != nil {
+		panic(err)
+	}
+	return time.Unix(int64(block.Time()), 0)
 }
 
 func TestNewAgent(t *testing.T) {
-	mockEthClient, _ := newMockEthClient()
+	mockEthClient, _, _ := newMockEthClient()
 
 	tests := []struct {
 		name        string
@@ -103,15 +119,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name: "valid config",
 			agentConfig: &agent.AgentConfig{
-				ArtGenerator:          &mockArtGenerator{},
-				Uploader:              &mockUploader{},
-				EthClient:             mockEthClient,
-				TappdClient:           &mockTappdClient{},
-				FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
-				PollingInterval:       5 * time.Second,
-				AccountPrivateKeySeed: agentPrivateKeySeed[:],
-				RsaPrivateKey:         rsaPrivateKey,
-				ApiIpPort:             "",
+				ArtGenerator:           &mockArtGenerator{},
+				Uploader:               &mockUploader{},
+				EthClient:              mockEthClient,
+				TappdClient:            &mockTappdClient{},
+				FactoryAddress:         common.HexToAddress("0x1234567890123456789012345678901234567890"),
+				EventPollingInterval:   5 * time.Second,
+				AuctionPollingInterval: 1 * time.Minute,
+				AccountPrivateKeySeed:  agentPrivateKeySeed[:],
+				RsaPrivateKey:          rsaPrivateKey,
+				ApiIpPort:              "",
 			},
 			wantErr: false,
 		},
@@ -137,18 +154,19 @@ func TestNewAgent(t *testing.T) {
 }
 
 func TestAgent_Start(t *testing.T) {
-	mockEthClient, _ := newMockEthClient()
+	mockEthClient, _, _ := newMockEthClient()
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:          &mockArtGenerator{},
-		Uploader:              &mockUploader{},
-		EthClient:             mockEthClient,
-		TappdClient:           &mockTappdClient{},
-		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval:       5 * time.Second,
-		AccountPrivateKeySeed: agentPrivateKeySeed[:],
-		RsaPrivateKey:         rsaPrivateKey,
-		ApiIpPort:             "",
+		ArtGenerator:           &mockArtGenerator{},
+		Uploader:               &mockUploader{},
+		EthClient:              mockEthClient,
+		TappdClient:            &mockTappdClient{},
+		FactoryAddress:         common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		EventPollingInterval:   5 * time.Second,
+		AuctionPollingInterval: 1 * time.Minute,
+		AccountPrivateKeySeed:  agentPrivateKeySeed[:],
+		RsaPrivateKey:          rsaPrivateKey,
+		ApiIpPort:              "",
 	}
 
 	agent, err := agent.NewAgent(context.Background(), agentConfig)
@@ -165,7 +183,7 @@ func TestAgent_Quote(t *testing.T) {
 	var a *agent.Agent
 	var err error
 
-	mockEthClient, _ := newMockEthClient()
+	mockEthClient, _, _ := newMockEthClient()
 
 	mockTappdClient := &mockTappdClient{
 		tdxQuote: func(ctx context.Context, reportData []byte) (*tappd.TdxQuoteResponse, error) {
@@ -185,15 +203,16 @@ func TestAgent_Quote(t *testing.T) {
 	}
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:          &mockArtGenerator{},
-		Uploader:              &mockUploader{},
-		EthClient:             mockEthClient,
-		TappdClient:           mockTappdClient,
-		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval:       5 * time.Second,
-		AccountPrivateKeySeed: agentPrivateKeySeed[:],
-		RsaPrivateKey:         rsaPrivateKey,
-		ApiIpPort:             "",
+		ArtGenerator:           &mockArtGenerator{},
+		Uploader:               &mockUploader{},
+		EthClient:              mockEthClient,
+		TappdClient:            mockTappdClient,
+		FactoryAddress:         common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		EventPollingInterval:   5 * time.Second,
+		AuctionPollingInterval: 1 * time.Minute,
+		AccountPrivateKeySeed:  agentPrivateKeySeed[:],
+		RsaPrivateKey:          rsaPrivateKey,
+		ApiIpPort:              "",
 	}
 
 	a, err = agent.NewAgent(context.Background(), agentConfig)
@@ -206,7 +225,7 @@ func TestAgent_Quote(t *testing.T) {
 
 func TestAgent_MainFlow(t *testing.T) {
 	t.Run("plain text system prompt", func(t *testing.T) {
-		mockEthClient, simBackend := newMockEthClient()
+		mockEthClient, simBackend, simClock := newMockEthClient()
 
 		factoryAddr, tx, factoryInstance, err := contractYayoiFactory.DeployContractYayoiFactory(
 			ownerAuth,
@@ -258,11 +277,12 @@ func TestAgent_MainFlow(t *testing.T) {
 		tx3Params.Value = big.NewInt(10)
 
 		tx3, err := factoryInstance.CreateCollection(&tx3Params, contractYayoiFactory.YayoiFactoryCreateCollectionParams{
-			Name:                  collectionName,
-			Symbol:                collectionSymbol,
-			SystemPromptUri:       systemPromptUri,
-			PaymentToken:          common.Address{},
-			PromptSubmissionPrice: big.NewInt(20),
+			Name:            collectionName,
+			Symbol:          collectionSymbol,
+			SystemPromptUri: systemPromptUri,
+			PaymentToken:    common.Address{},
+			MinimumBidPrice: big.NewInt(20),
+			AuctionDuration: 3600, // 1 hour auction duration
 		})
 		require.NoError(t, err)
 		simBackend.Commit()
@@ -276,7 +296,8 @@ func TestAgent_MainFlow(t *testing.T) {
 			config.EthClient = mockEthClient
 			config.HttpClient = mockHttpClient
 			config.FactoryAddress = factoryAddr
-			config.PollingInterval = 1 * time.Second
+			config.EventPollingInterval = 1 * time.Second
+			config.AuctionPollingInterval = 1 * time.Second
 			config.ArtGenerator = &mockArtGenerator{
 				generateUrl: func(ctx context.Context, prompt string, systemPrompt string) (string, error) {
 					require.Equal(t, prompt, userPrompt)
@@ -298,6 +319,7 @@ func TestAgent_MainFlow(t *testing.T) {
 					return uploadedJsonUri, nil
 				},
 			}
+			config.Clock = simClock
 		})
 
 		agentCtx, agentCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -317,7 +339,10 @@ func TestAgent_MainFlow(t *testing.T) {
 		tx4Params := *userAuth
 		tx4Params.Value = big.NewInt(20)
 
-		tx4, err := collectionInstance.SuggestPrompt(&tx4Params, userPrompt)
+		currentAuctionId, err := collectionInstance.GetCurrentAuctionId(nil)
+		require.NoError(t, err)
+
+		tx4, err := collectionInstance.SuggestPrompt(&tx4Params, currentAuctionId, userPrompt, big.NewInt(20))
 		require.NoError(t, err)
 		simBackend.Commit()
 		require.NotNil(t, tx4, "Should have a valid transaction suggesting a prompt")
@@ -325,6 +350,16 @@ func TestAgent_MainFlow(t *testing.T) {
 		tx4Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx4)
 		require.NoError(t, err)
 		require.NotNil(t, tx4Receipt, "Should have a valid transaction receipt")
+
+		// Finish the auction
+		endTime, err := collectionInstance.GetAuctionEndTime(nil, currentAuctionId)
+		require.NoError(t, err)
+
+		// Move time forward to end the auction
+		simBackend.AdjustTime(time.Duration(endTime.Int64()-simClock.Now().Unix()) * time.Second)
+		simBackend.Commit()
+
+		time.After(2 * time.Second)
 
 		<-agentCtx.Done()
 		agentCancel()
@@ -337,7 +372,7 @@ func TestAgent_MainFlow(t *testing.T) {
 	})
 
 	t.Run("encrypted system prompt", func(t *testing.T) {
-		mockEthClient, simBackend := newMockEthClient()
+		mockEthClient, simBackend, simClock := newMockEthClient()
 
 		// Deploy a new factory
 		factoryAddr, tx, factoryInstance, err := contractYayoiFactory.DeployContractYayoiFactory(
@@ -393,11 +428,12 @@ func TestAgent_MainFlow(t *testing.T) {
 		tx3Params := *ownerAuth
 		tx3Params.Value = big.NewInt(10)
 		tx3, err := factoryInstance.CreateCollection(&tx3Params, contractYayoiFactory.YayoiFactoryCreateCollectionParams{
-			Name:                  collectionName,
-			Symbol:                collectionSymbol,
-			SystemPromptUri:       systemPromptUri,
-			PaymentToken:          common.Address{},
-			PromptSubmissionPrice: big.NewInt(20),
+			Name:            collectionName,
+			Symbol:          collectionSymbol,
+			SystemPromptUri: systemPromptUri,
+			PaymentToken:    common.Address{},
+			MinimumBidPrice: big.NewInt(20),
+			AuctionDuration: 3600, // 1 hour auction duration
 		})
 		require.NoError(t, err)
 		simBackend.Commit()
@@ -411,7 +447,8 @@ func TestAgent_MainFlow(t *testing.T) {
 			config.EthClient = mockEthClient
 			config.HttpClient = mockHttpClient
 			config.FactoryAddress = factoryAddr
-			config.PollingInterval = 1 * time.Second
+			config.EventPollingInterval = 1 * time.Second
+			config.AuctionPollingInterval = 1 * time.Second
 			config.ArtGenerator = &mockArtGenerator{
 				generateUrl: func(ctx context.Context, prompt string, systemPrompt string) (string, error) {
 					require.Equal(t, prompt, userPrompt)
@@ -433,6 +470,7 @@ func TestAgent_MainFlow(t *testing.T) {
 					return uploadedJsonUri, nil
 				},
 			}
+			config.Clock = simClock
 		})
 
 		agentCtx, agentCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -451,7 +489,11 @@ func TestAgent_MainFlow(t *testing.T) {
 
 		tx4Params := *userAuth
 		tx4Params.Value = big.NewInt(20)
-		tx4, err := collectionInstance.SuggestPrompt(&tx4Params, userPrompt)
+
+		currentAuctionId, err := collectionInstance.GetCurrentAuctionId(nil)
+		require.NoError(t, err)
+
+		tx4, err := collectionInstance.SuggestPrompt(&tx4Params, currentAuctionId, userPrompt, big.NewInt(20))
 		require.NoError(t, err)
 		simBackend.Commit()
 		require.NotNil(t, tx4, "Should have a valid transaction suggesting a prompt")
@@ -459,6 +501,16 @@ func TestAgent_MainFlow(t *testing.T) {
 		tx4Receipt, err := bind.WaitMined(context.Background(), simBackend.Client(), tx4)
 		require.NoError(t, err)
 		require.NotNil(t, tx4Receipt, "Should have a valid transaction receipt")
+
+		// Finish the auction
+		endTime, err := collectionInstance.GetAuctionEndTime(nil, currentAuctionId)
+		require.NoError(t, err)
+
+		// Move time forward to end the auction
+		simBackend.AdjustTime(time.Duration(endTime.Int64()-simClock.Now().Unix()+1) * time.Second)
+		simBackend.Commit()
+
+		<-time.After(2 * time.Second)
 
 		<-agentCtx.Done()
 		agentCancel()

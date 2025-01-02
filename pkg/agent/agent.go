@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"sync"
 	"time"
@@ -50,11 +51,23 @@ type Agent struct {
 	systemPromptCache *expirable.LRU[string, string]
 	rsaPrivateKey     *rsa.PrivateKey
 
-	factoryAddress  common.Address
-	pollingInterval time.Duration
-	apiIpPort       string
+	factoryAddress         common.Address
+	eventPollingInterval   time.Duration
+	auctionPollingInterval time.Duration
+	apiIpPort              string
 
-	mu sync.Mutex
+	mu    sync.Mutex
+	clock AgentClock
+}
+
+type AgentClock interface {
+	Now() time.Time
+}
+
+type DefaultAgentClock struct{}
+
+func (d DefaultAgentClock) Now() time.Time {
+	return time.Now()
 }
 
 type AgentConfig struct {
@@ -64,11 +77,14 @@ type AgentConfig struct {
 	TappdClient  TappdClient
 	HttpClient   *http.Client
 
-	FactoryAddress        common.Address
-	PollingInterval       time.Duration
-	AccountPrivateKeySeed []byte
-	ApiIpPort             string
-	RsaPrivateKey         *rsa.PrivateKey
+	FactoryAddress         common.Address
+	EventPollingInterval   time.Duration
+	AuctionPollingInterval time.Duration
+	AccountPrivateKeySeed  []byte
+	ApiIpPort              string
+	RsaPrivateKey          *rsa.PrivateKey
+
+	Clock AgentClock
 }
 
 const (
@@ -84,10 +100,12 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 
 	systemPromptCache := expirable.NewLRU[string, string](systemPromptCacheSize, nil, systemPromptCacheTTL)
 
-	indexer, err := indexer.NewIndexer(indexer.IndexerOptions{
-		EthClient:       config.EthClient,
-		ContractAddress: config.FactoryAddress,
-		PollingInterval: config.PollingInterval,
+	indexer, err := indexer.NewIndexer(indexer.IndexerConfig{
+		EthClient:              config.EthClient,
+		FactoryAddress:         config.FactoryAddress,
+		EventPollingInterval:   config.EventPollingInterval,
+		AuctionPollingInterval: config.AuctionPollingInterval,
+		Clock:                  config.Clock,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create indexer: %w", err)
@@ -118,9 +136,12 @@ func NewAgent(ctx context.Context, config *AgentConfig) (*Agent, error) {
 		systemPromptCache: systemPromptCache,
 		rsaPrivateKey:     config.RsaPrivateKey,
 
-		factoryAddress:  config.FactoryAddress,
-		pollingInterval: config.PollingInterval,
-		apiIpPort:       config.ApiIpPort,
+		factoryAddress:         config.FactoryAddress,
+		eventPollingInterval:   config.EventPollingInterval,
+		auctionPollingInterval: config.AuctionPollingInterval,
+		apiIpPort:              config.ApiIpPort,
+
+		clock: config.Clock,
 	}
 
 	agent.apiRouter = agent.generateRouter()
@@ -146,46 +167,47 @@ func NewAgentConfigFromSetupResult(setupResult *setup.SetupResult) (*AgentConfig
 		FactoryAddress: setupResult.FactoryAddress,
 		HttpClient:     http.DefaultClient,
 
-		PollingInterval:       5 * time.Second,
-		AccountPrivateKeySeed: setupResult.AccountPrivateKeySeed,
-		ApiIpPort:             setupResult.ApiIpPort,
-		RsaPrivateKey:         setupResult.RsaPrivateKey,
+		EventPollingInterval:   5 * time.Second,
+		AuctionPollingInterval: 1 * time.Minute,
+		AccountPrivateKeySeed:  setupResult.AccountPrivateKeySeed,
+		ApiIpPort:              setupResult.ApiIpPort,
+		RsaPrivateKey:          setupResult.RsaPrivateKey,
+
+		Clock: DefaultAgentClock{},
 	}, nil
 }
 
 func (a *Agent) Start(ctx context.Context) error {
+	slog.Info("starting agent")
+
 	a.StartServer(ctx)
 
-	promptSuggestionChan := make(chan indexer.PromptSuggestion, 1000)
-	promptAuctionFinishedChan := make(chan indexer.PromptAuctionFinished, 1000)
-	a.indexer.IndexEvents(ctx, promptSuggestionChan, promptAuctionFinishedChan)
+	auctionEndChan := make(chan indexer.AuctionEnd, 1000)
+	a.indexer.Start(ctx, auctionEndChan)
+
+	slog.Info("agent started")
 
 	for {
 		select {
-		case promptSuggestion, ok := <-promptSuggestionChan:
+		case auctionEnd, ok := <-auctionEndChan:
 			if !ok {
 				return nil
 			}
-			slog.Info("prompt suggestion", "prompt", promptSuggestion.Prompt)
-		case promptAuctionFinished, ok := <-promptAuctionFinishedChan:
-			if !ok {
-				return nil
-			}
-			go a.processPromptAuctionFinished(ctx, promptAuctionFinished)
+			go a.processAuctionEnd(ctx, auctionEnd)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
 }
 
-func (a *Agent) processPromptAuctionFinished(ctx context.Context, event indexer.PromptAuctionFinished) {
-	collection, err := contractYayoiCollection.NewContractYayoiCollection(event.Log.Address, a.ethClient)
+func (a *Agent) processAuctionEnd(ctx context.Context, event indexer.AuctionEnd) {
+	collection, err := contractYayoiCollection.NewContractYayoiCollection(event.CollectionAddress, a.ethClient)
 	if err != nil {
 		slog.Error("failed to create collection", "error", err)
 		return
 	}
 
-	systemPrompt, ok := a.systemPromptCache.Get(event.Log.Address.Hex())
+	systemPrompt, ok := a.systemPromptCache.Get(event.CollectionAddress.Hex())
 	if !ok {
 		systemPromptUri, err := collection.SystemPromptUri(nil)
 		if err != nil {
@@ -199,7 +221,7 @@ func (a *Agent) processPromptAuctionFinished(ctx context.Context, event indexer.
 			return
 		}
 
-		a.systemPromptCache.Add(event.Log.Address.Hex(), systemPrompt)
+		a.systemPromptCache.Add(event.CollectionAddress.Hex(), systemPrompt)
 	}
 
 	domain, err := collection.Eip712Domain(nil)
@@ -232,9 +254,9 @@ func (a *Agent) processPromptAuctionFinished(ctx context.Context, event indexer.
 	}
 
 	a.mu.Lock()
-	_, err = collection.MintGeneratedToken(a.wallet.Auth(), event.Winner, ipfsHash, signature)
+	_, err = collection.FinishPromptAuction(a.wallet.Auth(), big.NewInt(int64(event.AuctionId)), ipfsHash, signature)
 	if err != nil {
-		slog.Error("failed to mint", "error", err)
+		slog.Error("failed to finish prompt auction", "error", err)
 		return
 	}
 	a.mu.Unlock()
@@ -287,8 +309,12 @@ func (a *Agent) FactoryAddress() common.Address {
 	return a.factoryAddress
 }
 
-func (a *Agent) PollingInterval() time.Duration {
-	return a.pollingInterval
+func (a *Agent) EventPollingInterval() time.Duration {
+	return a.eventPollingInterval
+}
+
+func (a *Agent) AuctionPollingInterval() time.Duration {
+	return a.auctionPollingInterval
 }
 
 func (a *Agent) ApiIpPort() string {
