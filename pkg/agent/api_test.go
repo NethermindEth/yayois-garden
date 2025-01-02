@@ -18,18 +18,20 @@ import (
 )
 
 func setupTestAgent(t *testing.T, opts ...func(*agent.AgentConfig)) *agent.Agent {
-	mockEthClient, _ := newMockEthClient()
+	mockEthClient, _, simClock := newMockEthClient()
 
 	agentConfig := &agent.AgentConfig{
-		ArtGenerator:          &mockArtGenerator{},
-		Uploader:              &mockUploader{},
-		EthClient:             mockEthClient,
-		TappdClient:           &mockTappdClient{},
-		FactoryAddress:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		PollingInterval:       5 * time.Second,
-		AccountPrivateKeySeed: agentPrivateKeySeed[:],
-		RsaPrivateKey:         rsaPrivateKey,
-		ApiIpPort:             "",
+		ArtGenerator:           &mockArtGenerator{},
+		Uploader:               &mockUploader{},
+		EthClient:              mockEthClient,
+		TappdClient:            &mockTappdClient{},
+		FactoryAddress:         common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		EventPollingInterval:   5 * time.Second,
+		AuctionPollingInterval: 1 * time.Minute,
+		AccountPrivateKeySeed:  agentPrivateKeySeed[:],
+		RsaPrivateKey:          rsaPrivateKey,
+		ApiIpPort:              "",
+		Clock:                  simClock,
 	}
 
 	for _, opt := range opts {

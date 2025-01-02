@@ -15,11 +15,14 @@ contract YayoiFactoryTest is Test {
     address public user = address(3);
 
     uint256 constant CREATION_PRICE = 1 ether;
-    uint256 constant PROMPT_PRICE = 0.1 ether;
+    uint256 constant MIN_BID_PRICE = 0.1 ether;
+    uint64 constant AUCTION_DURATION = 1 days;
+    uint256 constant BASE_MIN_BID_PRICE = 0.01 ether;
+    uint64 constant BASE_AUCTION_DURATION = 1 days;
 
     function setUp() public {
         paymentToken = new MockERC20();
-        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, address(this));
+        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, BASE_MIN_BID_PRICE, BASE_AUCTION_DURATION, address(this));
 
         vm.deal(user, 100 ether);
         paymentToken.transfer(user, 100 * 10 ** 18);
@@ -37,14 +40,15 @@ contract YayoiFactoryTest is Test {
             symbol: "TEST",
             systemPromptUri: "ipfs://test",
             paymentToken: address(paymentToken),
-            promptSubmissionPrice: PROMPT_PRICE
+            minimumBidPrice: MIN_BID_PRICE,
+            auctionDuration: AUCTION_DURATION
         });
 
         vm.startPrank(user);
         paymentToken.approve(address(factory), CREATION_PRICE);
 
         address predictedCollection = Clones.predictDeterministicAddress(
-            address(factory.collectionImpl()), keccak256("ipfs://test"), address(factory)
+            address(factory.collectionImpl()), keccak256(bytes("ipfs://test")), address(factory)
         );
 
         vm.expectEmit(true, true, false, true);
@@ -57,6 +61,8 @@ contract YayoiFactoryTest is Test {
         assertEq(YayoiCollection(collection).name(), "Test Collection");
         assertEq(YayoiCollection(collection).symbol(), "TEST");
         assertEq(YayoiCollection(collection).owner(), user);
+        assertEq(YayoiCollection(collection).minimumBidPrice(), MIN_BID_PRICE);
+        assertEq(YayoiCollection(collection).auctionDuration(), AUCTION_DURATION);
     }
 
     function testRevertIfInsufficientPayment() public {
@@ -65,7 +71,8 @@ contract YayoiFactoryTest is Test {
             symbol: "TEST",
             systemPromptUri: "ipfs://test",
             paymentToken: address(paymentToken),
-            promptSubmissionPrice: PROMPT_PRICE
+            minimumBidPrice: MIN_BID_PRICE,
+            auctionDuration: AUCTION_DURATION
         });
 
         vm.prank(user);
@@ -111,10 +118,22 @@ contract YayoiFactoryTest is Test {
         assertEq(factory.creationPrice(), newPrice);
     }
 
+    function testSetBaseMinimumBidPrice() public {
+        uint256 newPrice = 0.2 ether;
+        factory.setBaseMinimumBidPrice(newPrice);
+        assertEq(factory.baseMinimumBidPrice(), newPrice);
+    }
+
     function testSetProtocolFeeDestination() public {
         address newDest = address(123);
         factory.setProtocolFeeDestination(newDest);
         assertEq(factory.protocolFeeDestination(), newDest);
+    }
+
+    function testSetBaseAuctionDuration() public {
+        uint64 newDuration = 2 days;
+        factory.setBaseAuctionDuration(newDuration);
+        assertEq(factory.baseAuctionDuration(), newDuration);
     }
 
     function testRegisterSystemPrompt() public {
@@ -123,7 +142,8 @@ contract YayoiFactoryTest is Test {
             symbol: "TEST",
             systemPromptUri: "test",
             paymentToken: address(paymentToken),
-            promptSubmissionPrice: PROMPT_PRICE
+            minimumBidPrice: MIN_BID_PRICE,
+            auctionDuration: AUCTION_DURATION
         });
 
         vm.startPrank(user);
@@ -135,7 +155,9 @@ contract YayoiFactoryTest is Test {
         assertTrue(factory.isRegisteredCollection(collection));
         assertEq(
             collection,
-            Clones.predictDeterministicAddress(address(factory.collectionImpl()), keccak256("test"), address(factory))
+            Clones.predictDeterministicAddress(
+                address(factory.collectionImpl()), keccak256(bytes("test")), address(factory)
+            )
         );
     }
 

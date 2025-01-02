@@ -6,6 +6,7 @@ toolchain go1.22.10
 
 require (
 	github.com/Dstack-TEE/dstack/sdk/go v0.0.0-20241220051010-5f529a6e48ed
+	github.com/alitto/pond/v2 v2.1.6
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/ethersphere/bee v1.18.2
 	github.com/gin-gonic/gin v1.10.0
@@ -13,6 +14,7 @@ require (
 	github.com/sashabaranov/go-openai v1.36.0
 	github.com/stretchr/testify v1.9.0
 	github.com/zde37/pinata-go-sdk v1.0.0
+	golang.org/x/sync v0.7.0
 )
 
 require (
@@ -108,7 +110,6 @@ require (
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
