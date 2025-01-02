@@ -166,7 +166,7 @@ contract YayoiCollection is
      * @return auctionId The current auction ID
      */
     function getCurrentAuctionId() public view returns (uint256) {
-        return creationTimestamp / auctionDuration;
+        return (block.timestamp - creationTimestamp) / auctionDuration;
     }
 
     /**
