@@ -21,11 +21,12 @@ contract YayoiCollectionTest is Test {
     uint256 constant CREATION_PRICE = 1 ether;
     uint256 constant MIN_BID_PRICE = 0.1 ether;
     uint64 constant AUCTION_DURATION = 1 days;
+    uint256 constant BASE_MIN_BID_PRICE = 0.01 ether;
 
     function setUp() public {
         // Deploy contracts
         paymentToken = new MockERC20();
-        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, address(this));
+        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, BASE_MIN_BID_PRICE, address(this));
 
         // Authorize signer
         factory.updateAuthorizedSigner(signer, true);

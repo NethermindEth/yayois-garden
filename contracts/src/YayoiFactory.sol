@@ -24,6 +24,10 @@ contract YayoiFactory is Ownable {
     IERC20 public paymentToken;
     /// @notice Price to create a new collection
     uint256 public creationPrice;
+    /// @notice Base minimum bid price
+    /// @dev It's important from an economic perspective to have a base value
+    /// here, since there are associated costs with image generation.
+    uint256 public baseMinimumBidPrice;
 
     /// @notice Protocol fee percentage in basis points (10%)
     uint256 public constant PROTOCOL_FEE_BPS = 1000;
@@ -41,6 +45,8 @@ contract YayoiFactory is Ownable {
     event PaymentTokenUpdated(address indexed token);
     /// @notice Emitted when the creation price is updated
     event CreationPriceUpdated(uint256 price);
+    /// @notice Emitted when the base minimum bid price is updated
+    event BaseMinimumBidPriceUpdated(uint256 price);
     /// @notice Emitted when the protocol fee destination is updated
     event ProtocolFeeDestinationUpdated(address indexed destination);
     /// @notice Emitted when a system prompt URI hash is registered
@@ -50,12 +56,19 @@ contract YayoiFactory is Ownable {
      * @notice Initializes the factory with payment settings and deploys implementation
      * @param _paymentToken Address of token used for payments
      * @param _creationPrice Price to create a new collection
+     * @param _baseMinimumBidPrice Base minimum bid price
      * @param _protocolFeeDestination Address to receive protocol fees
      */
-    constructor(address _paymentToken, uint256 _creationPrice, address _protocolFeeDestination) Ownable(msg.sender) {
+    constructor(
+        address _paymentToken,
+        uint256 _creationPrice,
+        uint256 _baseMinimumBidPrice,
+        address _protocolFeeDestination
+    ) Ownable(msg.sender) {
         paymentToken = IERC20(_paymentToken);
         creationPrice = _creationPrice;
         protocolFeeDestination = _protocolFeeDestination;
+        baseMinimumBidPrice = _baseMinimumBidPrice;
 
         collectionImpl = new YayoiCollection();
     }
@@ -154,6 +167,15 @@ contract YayoiFactory is Ownable {
     function setCreationPrice(uint256 price) external onlyOwner {
         creationPrice = price;
         emit CreationPriceUpdated(price);
+    }
+
+    /**
+     * @notice Updates the base minimum bid price
+     * @param price New base minimum bid price
+     */
+    function setBaseMinimumBidPrice(uint256 price) external onlyOwner {
+        baseMinimumBidPrice = price;
+        emit BaseMinimumBidPriceUpdated(price);
     }
 
     /**

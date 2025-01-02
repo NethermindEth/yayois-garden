@@ -284,6 +284,8 @@ contract YayoiCollection is
      * @param _price New price in payment token units
      */
     function setMinimumBidPrice(uint256 _price) external onlyOwner {
+        require(_price >= factory.baseMinimumBidPrice(), "Less than base minimum bid price");
+
         minimumBidPrice = _price;
         emit MinimumBidPriceUpdated(_price);
     }

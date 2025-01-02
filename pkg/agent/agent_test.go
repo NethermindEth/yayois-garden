@@ -232,6 +232,7 @@ func TestAgent_MainFlow(t *testing.T) {
 			mockEthClient,
 			common.HexToAddress("0x0000000000000000000000000000000000000000"),
 			big.NewInt(10),
+			big.NewInt(1),
 			ownerAddress,
 		)
 		require.NoError(t, err)
@@ -380,6 +381,7 @@ func TestAgent_MainFlow(t *testing.T) {
 			mockEthClient,
 			common.HexToAddress("0x0000000000000000000000000000000000000000"),
 			big.NewInt(10),
+			big.NewInt(1),
 			ownerAddress,
 		)
 		require.NoError(t, err)
