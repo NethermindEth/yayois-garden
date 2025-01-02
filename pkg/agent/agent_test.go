@@ -233,6 +233,7 @@ func TestAgent_MainFlow(t *testing.T) {
 			common.HexToAddress("0x0000000000000000000000000000000000000000"),
 			big.NewInt(10),
 			big.NewInt(1),
+			uint64(1),
 			ownerAddress,
 		)
 		require.NoError(t, err)
@@ -382,6 +383,7 @@ func TestAgent_MainFlow(t *testing.T) {
 			common.HexToAddress("0x0000000000000000000000000000000000000000"),
 			big.NewInt(10),
 			big.NewInt(1),
+			uint64(1),
 			ownerAddress,
 		)
 		require.NoError(t, err)
@@ -408,7 +410,7 @@ func TestAgent_MainFlow(t *testing.T) {
 		uploadedArtUri := "test-uploaded-art-uri"
 		uploadedJsonUri := "test-uploaded-json-uri"
 		collectionName := "test-collection-name-encrypted"
-		collectionSymbol := "TESTE"
+		collectionSymbol := "TEST"
 
 		systemPromptEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &rsaPrivateKey.PublicKey, []byte(systemPromptDecrypted), nil)
 		require.NoError(t, err)

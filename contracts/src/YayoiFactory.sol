@@ -26,8 +26,14 @@ contract YayoiFactory is Ownable {
     uint256 public creationPrice;
     /// @notice Base minimum bid price
     /// @dev It's important from an economic perspective to have a base value
-    /// here, since there are associated costs with image generation.
+    /// here, since there are associated costs with image generation and
+    /// minting.
     uint256 public baseMinimumBidPrice;
+    /// @notice Base auction duration
+    /// @dev This should be set to a reasonable value so the agent does not
+    /// have an excessive amount of mintings to do and the auctions remain
+    /// competitive.
+    uint64 public baseAuctionDuration;
 
     /// @notice Protocol fee percentage in basis points (10%)
     uint256 public constant PROTOCOL_FEE_BPS = 1000;
@@ -47,6 +53,8 @@ contract YayoiFactory is Ownable {
     event CreationPriceUpdated(uint256 price);
     /// @notice Emitted when the base minimum bid price is updated
     event BaseMinimumBidPriceUpdated(uint256 price);
+    /// @notice Emitted when the base auction duration is updated
+    event BaseAuctionDurationUpdated(uint64 duration);
     /// @notice Emitted when the protocol fee destination is updated
     event ProtocolFeeDestinationUpdated(address indexed destination);
     /// @notice Emitted when a system prompt URI hash is registered
@@ -57,18 +65,21 @@ contract YayoiFactory is Ownable {
      * @param _paymentToken Address of token used for payments
      * @param _creationPrice Price to create a new collection
      * @param _baseMinimumBidPrice Base minimum bid price
+     * @param _baseAuctionDuration Base auction duration
      * @param _protocolFeeDestination Address to receive protocol fees
      */
     constructor(
         address _paymentToken,
         uint256 _creationPrice,
         uint256 _baseMinimumBidPrice,
+        uint64 _baseAuctionDuration,
         address _protocolFeeDestination
     ) Ownable(msg.sender) {
         paymentToken = IERC20(_paymentToken);
         creationPrice = _creationPrice;
-        protocolFeeDestination = _protocolFeeDestination;
         baseMinimumBidPrice = _baseMinimumBidPrice;
+        baseAuctionDuration = _baseAuctionDuration;
+        protocolFeeDestination = _protocolFeeDestination;
 
         collectionImpl = new YayoiCollection();
     }
@@ -101,6 +112,8 @@ contract YayoiFactory is Ownable {
         payable
         returns (address payable collection)
     {
+        require(params.auctionDuration >= baseAuctionDuration, "Less than base auction duration");
+
         if (address(paymentToken) != address(0)) {
             paymentToken.safeTransferFrom(msg.sender, address(this), creationPrice);
         } else {
@@ -176,6 +189,15 @@ contract YayoiFactory is Ownable {
     function setBaseMinimumBidPrice(uint256 price) external onlyOwner {
         baseMinimumBidPrice = price;
         emit BaseMinimumBidPriceUpdated(price);
+    }
+
+    /**
+     * @notice Updates the base auction duration
+     * @param duration New base auction duration
+     */
+    function setBaseAuctionDuration(uint64 duration) external onlyOwner {
+        baseAuctionDuration = duration;
+        emit BaseAuctionDurationUpdated(duration);
     }
 
     /**

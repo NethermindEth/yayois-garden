@@ -18,10 +18,11 @@ contract YayoiFactoryTest is Test {
     uint256 constant MIN_BID_PRICE = 0.1 ether;
     uint64 constant AUCTION_DURATION = 1 days;
     uint256 constant BASE_MIN_BID_PRICE = 0.01 ether;
+    uint64 constant BASE_AUCTION_DURATION = 1 days;
 
     function setUp() public {
         paymentToken = new MockERC20();
-        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, BASE_MIN_BID_PRICE, address(this));
+        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, BASE_MIN_BID_PRICE, BASE_AUCTION_DURATION, address(this));
 
         vm.deal(user, 100 ether);
         paymentToken.transfer(user, 100 * 10 ** 18);
@@ -127,6 +128,12 @@ contract YayoiFactoryTest is Test {
         address newDest = address(123);
         factory.setProtocolFeeDestination(newDest);
         assertEq(factory.protocolFeeDestination(), newDest);
+    }
+
+    function testSetBaseAuctionDuration() public {
+        uint64 newDuration = 2 days;
+        factory.setBaseAuctionDuration(newDuration);
+        assertEq(factory.baseAuctionDuration(), newDuration);
     }
 
     function testRegisterSystemPrompt() public {

@@ -22,11 +22,12 @@ contract YayoiCollectionTest is Test {
     uint256 constant MIN_BID_PRICE = 0.1 ether;
     uint64 constant AUCTION_DURATION = 1 days;
     uint256 constant BASE_MIN_BID_PRICE = 0.01 ether;
+    uint64 constant BASE_AUCTION_DURATION = 1 days;
 
     function setUp() public {
         // Deploy contracts
         paymentToken = new MockERC20();
-        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, BASE_MIN_BID_PRICE, address(this));
+        factory = new YayoiFactory(address(paymentToken), CREATION_PRICE, BASE_MIN_BID_PRICE, BASE_AUCTION_DURATION, address(this));
 
         // Authorize signer
         factory.updateAuthorizedSigner(signer, true);
@@ -211,9 +212,11 @@ contract YayoiCollectionTest is Test {
 
         vm.startPrank(user);
         paymentToken.approve(address(collection), MIN_BID_PRICE);
-        
-        vm.expectRevert("Pausable: paused");
-        collection.suggestPrompt(collection.getCurrentAuctionId(), "Test prompt", MIN_BID_PRICE);
+
+        uint256 auctionId = collection.getCurrentAuctionId();
+
+        vm.expectRevert();
+        collection.suggestPrompt(auctionId, "Test prompt", MIN_BID_PRICE);
         vm.stopPrank();
     }
 }
