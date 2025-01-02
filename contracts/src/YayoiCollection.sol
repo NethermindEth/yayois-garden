@@ -40,9 +40,28 @@ contract YayoiCollection is
     /// @notice URI containing the system prompt used for this collection
     string public systemPromptUri;
     /// @notice Token used for payments (address(0) for ETH)
-    IERC20 public paymentToken;
-    /// @notice Price to submit a prompt and mint a token
-    uint256 public promptSubmissionPrice;
+    address public paymentToken;
+    /// @notice Minimum price to submit a prompt
+    uint256 public minimumBidPrice;
+
+    /// @notice Creation timestamp, used as the starting point for auctions
+    uint64 public creationTimestamp;
+    /// @notice Duration of each auction in seconds
+    uint64 public auctionDuration;
+
+    /// @notice Struct to store auction information
+    struct Auction {
+        bool finished;
+        address highestBidder;
+        uint256 highestBid;
+        string prompt;
+    }
+
+    /// @notice Mapping from auction ID to auction info
+    mapping(uint256 => Auction) internal _auctions;
+
+    /// @notice Mapping to track user bids that can be withdrawn
+    mapping(address => uint256) public pendingWithdrawals;
 
     /// @dev Protocol fee in basis points (10%)
     uint256 private constant PROTOCOL_FEE_BPS = 1000;
@@ -51,9 +70,9 @@ contract YayoiCollection is
      * @notice Emitted when collection setup is completed
      * @param systemPromptUri The URI of the system prompt
      * @param paymentToken Address of the token used for payments
-     * @param promptSubmissionPrice Price to submit a prompt
+     * @param minimumBidPrice Minimum bid for auctions
      */
-    event SetupCompleted(string systemPromptUri, address paymentToken, uint256 promptSubmissionPrice);
+    event SetupCompleted(string systemPromptUri, address paymentToken, uint256 minimumBidPrice);
 
     /**
      * @notice Emitted when a prompt is submitted and token is minted
@@ -67,14 +86,30 @@ contract YayoiCollection is
      * @notice Emitted when prompt submission price is updated
      * @param price New price for prompt submissions
      */
-    event PromptSubmissionPriceUpdated(uint256 price);
+    event MinimumBidPriceUpdated(uint256 price);
 
     /**
-     * @notice Emitted when a prompt is suggested without minting
-     * @param sender Address that suggested the prompt
-     * @param prompt The suggested prompt text
+     * @notice Emitted when a new auction starts
+     * @param auctionId ID of the auction
+     * @param startTime Start time of the auction
      */
-    event PromptSuggested(address indexed sender, string prompt);
+    event PromptAuctionStarted(uint256 indexed auctionId, uint256 startTime);
+
+    /**
+     * @notice Emitted when a new bid is placed
+     * @param auctionId ID of the auction
+     * @param bidder Address of the bidder
+     * @param amount Bid amount
+     */
+    event PromptAuctionBid(uint256 indexed auctionId, address indexed bidder, uint256 amount);
+
+    /**
+     * @notice Emitted when an auction is finished
+     * @param auctionId ID of the auction
+     * @param winner Address of the auction winner
+     * @param prompt The winning prompt
+     */
+    event PromptAuctionFinished(uint256 indexed auctionId, address indexed winner, string prompt);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -89,7 +124,8 @@ contract YayoiCollection is
      * @param owner Address that will own the collection
      * @param systemPromptUri URI of the system prompt
      * @param paymentToken Address of token used for payments
-     * @param promptSubmissionPrice Price to submit a prompt
+     * @param minimumBidPrice Price to submit a prompt
+     * @param auctionDuration Duration of each auction in seconds
      */
     struct InitializeParams {
         string name;
@@ -98,7 +134,8 @@ contract YayoiCollection is
         address owner;
         string systemPromptUri;
         address paymentToken;
-        uint256 promptSubmissionPrice;
+        uint256 minimumBidPrice;
+        uint64 auctionDuration;
     }
 
     /**
@@ -107,6 +144,7 @@ contract YayoiCollection is
      */
     function initialize(InitializeParams memory params) public initializer {
         require(params.factory != address(0), "Invalid factory");
+        require(params.auctionDuration > 0, "Invalid auction duration");
 
         __ERC721_init(params.name, params.symbol);
         __ERC721URIStorage_init();
@@ -115,70 +153,139 @@ contract YayoiCollection is
 
         factory = YayoiFactory(payable(params.factory));
         systemPromptUri = params.systemPromptUri;
-        paymentToken = IERC20(params.paymentToken);
-        promptSubmissionPrice = params.promptSubmissionPrice;
+        paymentToken = params.paymentToken;
+        minimumBidPrice = params.minimumBidPrice;
+        auctionDuration = params.auctionDuration;
+        creationTimestamp = uint64(block.timestamp);
 
-        emit SetupCompleted(params.systemPromptUri, params.paymentToken, params.promptSubmissionPrice);
+        emit SetupCompleted(params.systemPromptUri, params.paymentToken, params.minimumBidPrice);
     }
 
     /**
-     * @notice Mints a new token with a verified signature
-     * @param to Address to mint the token to
-     * @param uri URI containing the prompt and generated art
-     * @param signature EIP-712 signature from an authorized signer
+     * @notice Gets the current auction ID based on current timestamp
+     * @return auctionId The current auction ID
      */
-    function mintGeneratedToken(address to, string memory uri, bytes memory signature) external {
-        require(address(factory) != address(0), "Not initialized");
+    function getCurrentAuctionId() public view returns (uint256) {
+        return creationTimestamp / auctionDuration;
+    }
+
+    /**
+     * @notice Gets the auction ID for a specific timestamp
+     * @param timestamp The timestamp to get the auction ID for
+     * @return auctionId The auction ID for that timestamp
+     */
+    function getAuctionIdByTimestamp(uint256 timestamp) public view returns (uint256) {
+        return (timestamp - creationTimestamp) / auctionDuration;
+    }
+
+    /**
+     * @notice Gets the start time of an auction
+     * @param auctionId The auction ID
+     * @return startTime The start time of the auction
+     */
+    function getAuctionStartTime(uint256 auctionId) public view returns (uint256) {
+        return creationTimestamp + auctionId * auctionDuration;
+    }
+
+    /**
+     * @notice Gets the end time of an auction
+     * @param auctionId The auction ID
+     * @return endTime The end time of the auction
+     */
+    function getAuctionEndTime(uint256 auctionId) public view returns (uint256) {
+        return creationTimestamp + (auctionId + 1) * auctionDuration;
+    }
+
+    /**
+     * @notice Suggests a prompt and starts an auction
+     * @param auctionId The auction ID to submit for
+     * @param prompt The prompt text to suggest
+     * @param bid Bid amount
+     */
+    function suggestPrompt(uint256 auctionId, string memory prompt, uint256 bid) external payable {
+        require(auctionId == getCurrentAuctionId(), "Invalid auction ID");
+        require(bid >= minimumBidPrice, "Bid too low");
+
+        Auction storage auction = _auctions[auctionId];
+        if (auction.highestBidder == address(0)) {
+            emit PromptAuctionStarted(auctionId, block.timestamp);
+        }
+
+        address previousBidder = auction.highestBidder;
+        uint256 previousBid = auction.highestBid;
+
+        require(bid > previousBid, "Not a winning bid");
+
+        if (previousBid > 0) {
+            pendingWithdrawals[previousBidder] += previousBid;
+        }
+
+        auction.highestBidder = msg.sender;
+        auction.highestBid = bid;
+        auction.prompt = prompt;
+
+        emit PromptAuctionBid(auctionId, msg.sender, bid);
+
+        uint256 userDepositedBalance = pendingWithdrawals[msg.sender];
+        if (bid > userDepositedBalance) {
+            pendingWithdrawals[msg.sender] = 0;
+            _deposit(paymentToken, bid - userDepositedBalance);
+        } else {
+            pendingWithdrawals[msg.sender] = userDepositedBalance - bid;
+        }
+    }
+
+    /**
+     * @notice Finishes an auction after its duration has passed
+     * @param auctionId The ID of the auction to finish
+     */
+    function finishPromptAuction(uint256 auctionId, string memory uri, bytes memory signature) external {
+        require(block.timestamp >= getAuctionEndTime(auctionId), "Auction still active");
+        Auction storage auction = _auctions[auctionId];
+        require(!auction.finished, "Auction already finished");
+        require(auction.highestBidder != address(0), "No bids placed");
+
+        auction.finished = true;
 
         uint256 tokenId = nextTokenId;
         nextTokenId = tokenId + 1;
 
         // Verify signature
-        bytes32 structHash = keccak256(abi.encode(MINT_TYPEHASH, to, keccak256(bytes(uri))));
+        bytes32 structHash = keccak256(abi.encode(MINT_TYPEHASH, auction.highestBidder, keccak256(bytes(uri))));
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(hash, signature);
         require(factory.isAuthorizedSigner(signer), "Invalid signature");
 
         // Mint NFT
-        _safeMint(to, tokenId);
+        _safeMint(auction.highestBidder, tokenId);
         _setTokenURI(tokenId, uri);
 
-        emit PromptSubmitted(msg.sender, tokenId, uri);
+        // Calculate and transfer protocol fee
+        uint256 protocolFee = (auction.highestBid * PROTOCOL_FEE_BPS) / 10000;
+        _withdraw(paymentToken, address(factory), protocolFee);
+
+        // Keep collection fee in contract
+        emit PromptAuctionFinished(auctionId, auction.highestBidder, auction.prompt);
     }
 
     /**
-     * @notice Suggests a prompt without minting a token
-     * @param prompt The prompt text to suggest
+     * @notice Withdraws pending refunds from outbid auctions
      */
-    function suggestPrompt(string memory prompt) external payable {
-        uint256 protocolFee = (promptSubmissionPrice * PROTOCOL_FEE_BPS) / 10000;
-        uint256 collectionFee = promptSubmissionPrice - protocolFee;
+    function withdrawPendingBids() external {
+        uint256 amount = pendingWithdrawals[msg.sender];
+        require(amount > 0, "No pending withdrawals");
 
-        if (address(paymentToken) != address(0)) {
-            paymentToken.safeTransferFrom(msg.sender, address(factory), protocolFee);
-            paymentToken.safeTransferFrom(msg.sender, address(this), collectionFee);
-        } else {
-            require(msg.value >= promptSubmissionPrice, "Insufficient payment");
-
-            (bool success1,) = payable(address(factory)).call{value: protocolFee}("");
-            require(success1, "Protocol fee transfer failed");
-
-            if (msg.value > promptSubmissionPrice) {
-                (bool success2,) = payable(msg.sender).call{value: msg.value - promptSubmissionPrice}("");
-                require(success2, "Excess ETH return failed");
-            }
-        }
-
-        emit PromptSuggested(msg.sender, prompt);
+        pendingWithdrawals[msg.sender] = 0;
+        _withdraw(paymentToken, msg.sender, amount);
     }
 
     /**
      * @notice Sets a new price for prompt submissions
      * @param _price New price in payment token units
      */
-    function setPromptSubmissionPrice(uint256 _price) external onlyOwner {
-        promptSubmissionPrice = _price;
-        emit PromptSubmissionPriceUpdated(_price);
+    function setMinimumBidPrice(uint256 _price) external onlyOwner {
+        minimumBidPrice = _price;
+        emit MinimumBidPriceUpdated(_price);
     }
 
     /**
@@ -186,11 +293,55 @@ contract YayoiCollection is
      * @param token Address of token to withdraw (address(0) for ETH)
      */
     function sweepTokens(address token) external onlyOwner {
+        _withdrawAll(token, msg.sender);
+    }
+
+    /**
+     * @notice Returns the auction information for a given auction ID
+     * @param auctionId The ID of the auction
+     * @return auction The auction information
+     */
+    function getAuction(uint256 auctionId) external view returns (Auction memory) {
+        return _auctions[auctionId];
+    }
+
+    /**
+     * @dev Transfer tokens or ETH from the contract
+     * @param token Address of token to transfer (address(0) for ETH)
+     * @param to Address to transfer to
+     * @param amount Amount to transfer
+     */
+    function _withdraw(address token, address to, uint256 amount) internal {
         if (token == address(0)) {
-            (bool success,) = msg.sender.call{value: address(this).balance}("");
+            (bool success,) = to.call{value: amount}("");
             require(success, "ETH transfer failed");
         } else {
-            IERC20(token).safeTransfer(msg.sender, IERC20(token).balanceOf(address(this)));
+            IERC20(token).safeTransfer(to, amount);
+        }
+    }
+
+    /**
+     * @dev Transfers all tokens or ETH from the contract to the owner
+     */
+    function _withdrawAll(address token, address to) internal onlyOwner {
+        if (token == address(0)) {
+            (bool success,) = to.call{value: address(this).balance}("");
+            require(success, "ETH transfer failed");
+        } else {
+            IERC20(token).safeTransfer(to, IERC20(token).balanceOf(address(this)));
+        }
+    }
+
+    /**
+     * @dev Transfer tokens or ETH from sender to the contract
+     * @param token Address of token to transfer (address(0) for ETH)
+     * @param amount Amount to transfer
+     */
+    function _deposit(address token, uint256 amount) internal {
+        if (token == address(0)) {
+            require(msg.value >= amount, "Insufficient ETH");
+        } else {
+            IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         }
     }
 

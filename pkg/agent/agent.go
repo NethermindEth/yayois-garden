@@ -156,23 +156,29 @@ func NewAgentConfigFromSetupResult(setupResult *setup.SetupResult) (*AgentConfig
 func (a *Agent) Start(ctx context.Context) error {
 	a.StartServer(ctx)
 
-	events := make(chan indexer.PromptSuggestion, 1000)
-	a.indexer.IndexEvents(ctx, events)
+	promptSuggestionChan := make(chan indexer.PromptSuggestion, 1000)
+	promptAuctionFinishedChan := make(chan indexer.PromptAuctionFinished, 1000)
+	a.indexer.IndexEvents(ctx, promptSuggestionChan, promptAuctionFinishedChan)
 
 	for {
 		select {
-		case event, ok := <-events:
+		case promptSuggestion, ok := <-promptSuggestionChan:
 			if !ok {
 				return nil
 			}
-			go a.processEvent(ctx, event)
+			slog.Info("prompt suggestion", "prompt", promptSuggestion.Prompt)
+		case promptAuctionFinished, ok := <-promptAuctionFinishedChan:
+			if !ok {
+				return nil
+			}
+			go a.processPromptAuctionFinished(ctx, promptAuctionFinished)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
 }
 
-func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion) {
+func (a *Agent) processPromptAuctionFinished(ctx context.Context, event indexer.PromptAuctionFinished) {
 	collection, err := contractYayoiCollection.NewContractYayoiCollection(event.Log.Address, a.ethClient)
 	if err != nil {
 		slog.Error("failed to create collection", "error", err)
@@ -214,7 +220,7 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 		return
 	}
 
-	signature, err := a.wallet.SignMintMessage(event.Sender, ipfsHash, wallet.EIP712Domain{
+	signature, err := a.wallet.SignMintMessage(event.Winner, ipfsHash, wallet.EIP712Domain{
 		Name:              domain.Name,
 		Version:           domain.Version,
 		ChainId:           domain.ChainId,
@@ -226,7 +232,7 @@ func (a *Agent) processEvent(ctx context.Context, event indexer.PromptSuggestion
 	}
 
 	a.mu.Lock()
-	_, err = collection.MintGeneratedToken(a.wallet.Auth(), event.Sender, ipfsHash, signature)
+	_, err = collection.MintGeneratedToken(a.wallet.Auth(), event.Winner, ipfsHash, signature)
 	if err != nil {
 		slog.Error("failed to mint", "error", err)
 		return

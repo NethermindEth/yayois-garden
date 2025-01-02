@@ -66,14 +66,16 @@ contract YayoiFactory is Ownable {
      * @param symbol Collection symbol
      * @param systemPromptUri URI of the system prompt
      * @param paymentToken Address of token used for payments
-     * @param promptSubmissionPrice Price to submit a prompt
+     * @param minimumBidPrice Minimum bid price
+     * @param auctionDuration Duration of the auction
      */
     struct CreateCollectionParams {
         string name;
         string symbol;
         string systemPromptUri;
         address paymentToken;
-        uint256 promptSubmissionPrice;
+        uint256 minimumBidPrice;
+        uint64 auctionDuration;
     }
 
     /**
@@ -104,7 +106,8 @@ contract YayoiFactory is Ownable {
                 owner: msg.sender,
                 systemPromptUri: params.systemPromptUri,
                 paymentToken: params.paymentToken,
-                promptSubmissionPrice: params.promptSubmissionPrice
+                minimumBidPrice: params.minimumBidPrice,
+                auctionDuration: params.auctionDuration
             })
         );
 

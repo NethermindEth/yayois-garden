@@ -44,6 +44,12 @@ type PromptSuggestion struct {
 	Prompt string
 }
 
+type PromptAuctionFinished struct {
+	Log    types.Log
+	Winner common.Address
+	Prompt string
+}
+
 func NewIndexer(opts IndexerOptions) (*Indexer, error) {
 	factory, err := contractYayoiFactory.NewContractYayoiFactory(opts.ContractAddress, opts.EthClient)
 	if err != nil {
@@ -66,20 +72,16 @@ func (i *Indexer) GetContractAddress() common.Address {
 	return i.contractAddress
 }
 
-func (i *Indexer) IndexEvents(ctx context.Context, ch chan<- PromptSuggestion) error {
-	go i.watchPromptSuggestions(ctx, ch)
-	return nil
-}
+func (i *Indexer) IndexEvents(ctx context.Context, promptSuggestedChan chan<- PromptSuggestion, promptAuctionFinishedChan chan<- PromptAuctionFinished) error {
+	defer close(promptSuggestedChan)
+	defer close(promptAuctionFinishedChan)
 
-func (i *Indexer) watchPromptSuggestions(ctx context.Context, ch chan<- PromptSuggestion) error {
-	latestBlock, err := i.ethClient.BlockNumber(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
-	}
+	latestBlock := uint64(0)
+	fromBlock := new(big.Int)
+	toBlock := new(big.Int)
 
-	// preallocations
-	fromBlock, toBlock := new(big.Int), new(big.Int)
 	promptSuggestedLog := new(contractYayoiCollection.ContractYayoiCollectionPromptSuggested)
+	promptAuctionFinishedLog := new(contractYayoiCollection.ContractYayoiCollectionPromptAuctionFinished)
 
 	yayoiCollectionAbi, err := contractYayoiCollection.ContractYayoiCollectionMetaData.GetAbi()
 	if err != nil {
@@ -103,36 +105,44 @@ func (i *Indexer) watchPromptSuggestions(ctx context.Context, ch chan<- PromptSu
 			fromBlock.SetUint64(latestBlock + 1)
 			toBlock.SetUint64(currentBlock)
 
-			events, err := i.ethClient.FilterLogs(ctx, ethereum.FilterQuery{
+			// Filter for both PromptSuggested and PromptAuctionFinished events
+			logs, err := i.ethClient.FilterLogs(ctx, ethereum.FilterQuery{
 				FromBlock: fromBlock,
 				ToBlock:   toBlock,
-				Topics:    [][]common.Hash{{yayoiCollectionAbi.Events["PromptSuggested"].ID}},
+				Topics: [][]common.Hash{{
+					yayoiCollectionAbi.Events["PromptSuggested"].ID,
+					yayoiCollectionAbi.Events["PromptAuctionFinished"].ID,
+				}},
 			})
 			if err != nil {
 				return fmt.Errorf("failed to filter events: %v", err)
 			}
 
-			for _, event := range events {
-				if err := unpackPromptSuggested(yayoiCollectionAbi, promptSuggestedLog, event); err != nil {
-					slog.Warn("failed to unpack event", "error", err)
-					continue
-				}
+			for _, event := range logs {
+				selector := event.Topics[0]
 
-				isRegistered, err := i.collectionCache.IsCollectionRegistered(promptSuggestedLog.Raw.Address)
-				if err != nil {
-					slog.Warn("failed to check if collection is registered", "collection", promptSuggestedLog.Raw.Address, "error", err)
-					continue
-				}
+				if promptSuggestedChan != nil && selector == yayoiCollectionAbi.Events["PromptSuggested"].ID {
+					if err := unpackPromptSuggested(yayoiCollectionAbi, promptSuggestedLog, event); err != nil {
+						slog.Warn("failed to unpack PromptSuggested event", "error", err)
+						continue
+					}
 
-				if !isRegistered {
-					slog.Warn("collection not registered", "collection", promptSuggestedLog.Raw.Address)
-					continue
-				}
+					promptSuggestedChan <- PromptSuggestion{
+						Log:    event,
+						Sender: promptSuggestedLog.Sender,
+						Prompt: promptSuggestedLog.Prompt,
+					}
+				} else if promptAuctionFinishedChan != nil && selector == yayoiCollectionAbi.Events["PromptAuctionFinished"].ID {
+					if err := unpackPromptAuctionFinished(yayoiCollectionAbi, promptAuctionFinishedLog, event); err != nil {
+						slog.Warn("failed to unpack PromptAuctionFinished event", "error", err)
+						continue
+					}
 
-				ch <- PromptSuggestion{
-					Log:    promptSuggestedLog.Raw,
-					Sender: promptSuggestedLog.Sender,
-					Prompt: promptSuggestedLog.Prompt,
+					promptAuctionFinishedChan <- PromptAuctionFinished{
+						Log:    event,
+						Winner: promptAuctionFinishedLog.Winner,
+						Prompt: promptAuctionFinishedLog.Prompt,
+					}
 				}
 			}
 
@@ -146,6 +156,11 @@ func (i *Indexer) watchPromptSuggestions(ctx context.Context, ch chan<- PromptSu
 func unpackPromptSuggested(contractAbi *abi.ABI, out *contractYayoiCollection.ContractYayoiCollectionPromptSuggested, log types.Log) error {
 	out.Raw = log
 	return unpackEvent(contractAbi, out, "PromptSuggested", log)
+}
+
+func unpackPromptAuctionFinished(contractAbi *abi.ABI, out *contractYayoiCollection.ContractYayoiCollectionPromptAuctionFinished, log types.Log) error {
+	out.Raw = log
+	return unpackEvent(contractAbi, out, "PromptAuctionFinished", log)
 }
 
 func unpackEvent(contractAbi *abi.ABI, out interface{}, event string, log types.Log) error {

@@ -13,12 +13,14 @@ contract YayoiCollectionTest is Test {
 
     address public owner = address(1);
     address public user = address(3);
+    address public user2 = address(4);
 
     uint256 constant SIGNER_PRIVATE_KEY = 0xdef1;
     address public signer = vm.addr(SIGNER_PRIVATE_KEY);
 
     uint256 constant CREATION_PRICE = 1 ether;
-    uint256 constant PROMPT_PRICE = 0.1 ether;
+    uint256 constant MIN_BID_PRICE = 0.1 ether;
+    uint64 constant AUCTION_DURATION = 1 days;
 
     function setUp() public {
         // Deploy contracts
@@ -36,14 +38,17 @@ contract YayoiCollectionTest is Test {
             symbol: "TEST",
             systemPromptUri: "ipfs://test",
             paymentToken: address(paymentToken),
-            promptSubmissionPrice: PROMPT_PRICE
+            minimumBidPrice: MIN_BID_PRICE,
+            auctionDuration: AUCTION_DURATION
         });
 
         collection = YayoiCollection(payable(factory.createCollection(params)));
 
         // Setup test accounts
         vm.deal(user, 100 ether);
+        vm.deal(user2, 100 ether);
         paymentToken.transfer(user, 100 * 10 ** 18);
+        paymentToken.transfer(user2, 100 * 10 ** 18);
 
         vm.label(address(collection), "Collection");
         vm.label(address(factory), "Factory");
@@ -51,6 +56,7 @@ contract YayoiCollectionTest is Test {
         vm.label(owner, "Owner");
         vm.label(signer, "Signer");
         vm.label(user, "User");
+        vm.label(user2, "User2");
     }
 
     function testInitialization() public view {
@@ -60,72 +66,114 @@ contract YayoiCollectionTest is Test {
         assertEq(address(collection.factory()), address(factory));
         assertEq(collection.systemPromptUri(), "ipfs://test");
         assertEq(address(collection.paymentToken()), address(paymentToken));
-        assertEq(collection.promptSubmissionPrice(), PROMPT_PRICE);
+        assertEq(collection.minimumBidPrice(), MIN_BID_PRICE);
+        assertEq(collection.auctionDuration(), AUCTION_DURATION);
     }
 
-    function testMintWithValidSignature() public {
-        // Generate signature
+    function testSuggestPrompt() public {
+        uint256 currentAuctionId = collection.getCurrentAuctionId();
+
+        vm.startPrank(user);
+        paymentToken.approve(address(collection), MIN_BID_PRICE);
+
+        vm.expectEmit(true, true, false, true);
+        emit YayoiCollection.PromptAuctionStarted(currentAuctionId, block.timestamp);
+        collection.suggestPrompt(currentAuctionId, "Test prompt", MIN_BID_PRICE);
+
+        YayoiCollection.Auction memory auction = collection.getAuction(currentAuctionId);
+        assertEq(auction.highestBidder, user);
+        assertEq(auction.highestBid, MIN_BID_PRICE);
+        assertEq(auction.prompt, "Test prompt");
+        vm.stopPrank();
+    }
+
+    function testOutbidPreviousBid() public {
+        uint256 currentAuctionId = collection.getCurrentAuctionId();
+        uint256 firstBid = MIN_BID_PRICE;
+        uint256 secondBid = MIN_BID_PRICE * 2;
+
+        // First bid
+        vm.startPrank(user);
+        paymentToken.approve(address(collection), firstBid);
+        collection.suggestPrompt(currentAuctionId, "First prompt", firstBid);
+        vm.stopPrank();
+
+        // Second bid
+        vm.startPrank(user2);
+        paymentToken.approve(address(collection), secondBid);
+        collection.suggestPrompt(currentAuctionId, "Second prompt", secondBid);
+        vm.stopPrank();
+
+        YayoiCollection.Auction memory auction = collection.getAuction(currentAuctionId);
+        assertEq(auction.highestBidder, user2);
+        assertEq(auction.highestBid, secondBid);
+        assertEq(auction.prompt, "Second prompt");
+        assertEq(collection.pendingWithdrawals(user), firstBid);
+    }
+
+    function testFinishAuction() public {
+        uint256 currentAuctionId = collection.getCurrentAuctionId();
+
+        vm.startPrank(user);
+        paymentToken.approve(address(collection), MIN_BID_PRICE);
+        collection.suggestPrompt(currentAuctionId, "Test prompt", MIN_BID_PRICE);
+        vm.stopPrank();
+
+        // Fast forward past auction end
+        vm.warp(block.timestamp + AUCTION_DURATION + 1);
+
+        // Generate signature for minting
         bytes32 MINT_TYPEHASH = keccak256("Mint(address to,string uri)");
         string memory tokenUri = "ipfs://token1";
 
         bytes32 structHash = keccak256(abi.encode(MINT_TYPEHASH, user, keccak256(bytes(tokenUri))));
-
         bytes32 digest = collection.domainSeparator();
         digest = keccak256(abi.encodePacked("\x19\x01", digest, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(SIGNER_PRIVATE_KEY, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        // Mint token
-        vm.startPrank(user);
-        paymentToken.approve(address(collection), PROMPT_PRICE);
-        collection.mintGeneratedToken(user, tokenUri, signature);
-        vm.stopPrank();
+        uint256 protocolFeeBefore = paymentToken.balanceOf(address(factory));
 
+        vm.expectEmit(true, true, false, true);
+        emit YayoiCollection.PromptAuctionFinished(currentAuctionId, user, "Test prompt");
+        collection.finishPromptAuction(currentAuctionId, tokenUri, signature);
+
+        uint256 protocolFee = (MIN_BID_PRICE * 1000) / 10000; // 10% fee
+        assertEq(paymentToken.balanceOf(address(factory)) - protocolFeeBefore, protocolFee);
+
+        YayoiCollection.Auction memory auction = collection.getAuction(currentAuctionId);
+        assertTrue(auction.finished);
         assertEq(collection.ownerOf(0), user);
         assertEq(collection.tokenURI(0), tokenUri);
     }
 
-    function testRevertIfInvalidSignature() public {
+    function testRevertIfInvalidSignatureFinishAuction() public {
+        uint256 currentAuctionId = collection.getCurrentAuctionId();
+
+        vm.startPrank(user);
+        paymentToken.approve(address(collection), MIN_BID_PRICE);
+        collection.suggestPrompt(currentAuctionId, "Test prompt", MIN_BID_PRICE);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + AUCTION_DURATION + 1);
+
         bytes memory invalidSignature = new bytes(65);
-
-        vm.startPrank(user);
-        paymentToken.approve(address(collection), PROMPT_PRICE);
         vm.expectRevert();
-        collection.mintGeneratedToken(user, "ipfs://token1", invalidSignature);
-        vm.stopPrank();
+        collection.finishPromptAuction(currentAuctionId, "ipfs://token1", invalidSignature);
     }
 
-    function testSuggestPrompt() public {
-        vm.startPrank(user);
-        paymentToken.approve(address(collection), PROMPT_PRICE);
-
-        uint256 protocolFeeBefore = paymentToken.balanceOf(address(factory));
-        uint256 collectionFeeBefore = paymentToken.balanceOf(address(collection));
-
-        vm.expectEmit(true, false, false, true);
-        emit YayoiCollection.PromptSuggested(user, "Test prompt");
-        collection.suggestPrompt("Test prompt");
-
-        uint256 protocolFee = (PROMPT_PRICE * 1000) / 10000; // 10% fee
-        uint256 collectionFee = PROMPT_PRICE - protocolFee;
-
-        assertEq(paymentToken.balanceOf(address(factory)) - protocolFeeBefore, protocolFee);
-        assertEq(paymentToken.balanceOf(address(collection)) - collectionFeeBefore, collectionFee);
-        vm.stopPrank();
-    }
-
-    function testSetPromptSubmissionPrice() public {
+    function testSetMinimumBidPrice() public {
         uint256 newPrice = 0.2 ether;
 
-        collection.setPromptSubmissionPrice(newPrice);
-        assertEq(collection.promptSubmissionPrice(), newPrice);
+        collection.setMinimumBidPrice(newPrice);
+        assertEq(collection.minimumBidPrice(), newPrice);
     }
 
-    function testRevertIfUnauthorizedSetPromptSubmissionPrice() public {
+    function testRevertIfUnauthorizedSetMinimumBidPrice() public {
         vm.prank(user);
         vm.expectRevert();
-        collection.setPromptSubmissionPrice(0.2 ether);
+        collection.setMinimumBidPrice(0.2 ether);
     }
 
     function testSweepTokens() public {
