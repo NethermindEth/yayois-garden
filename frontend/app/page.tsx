@@ -7,7 +7,7 @@ import { Footer } from "@/components/footer";
 import { Logo } from "@/components/Logo";
 import { getLastUpdate } from "@/lib/api";
 import Link from "next/link";
-import Image from 'next/image'
+import Image from "next/image";
 
 const nfts = [
   {
@@ -69,11 +69,15 @@ const nfts = [
 export default function Home() {
   return (
     <main className="flex flex-col min-h-screen bg-black relative">
-      <div className="absolute top-[-60px] z-0">
-        <Image
+      <div className="absolute top-[-60px] z-0 w-full">
+      <Image
           src="/HeroBackground.png"
           alt="Background"
+          width={1920}
+          height={290}
+          priority
           className="w-full h-[290px] object-cover object-center"
+          sizes="100vw"
         />
       </div>
 
