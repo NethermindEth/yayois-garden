@@ -1,20 +1,19 @@
 module github.com/NethermindEth/yayois-garden
 
 go 1.22.2
-
-toolchain go1.22.10
+toolchain go1.23.7
 
 require (
 	github.com/Dstack-TEE/dstack/sdk/go v0.0.0-20241220051010-5f529a6e48ed
 	github.com/alitto/pond/v2 v2.1.6
-	github.com/ethereum/go-ethereum v1.14.12
+	github.com/ethereum/go-ethereum v1.14.13
 	github.com/ethersphere/bee v1.18.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/sashabaranov/go-openai v1.36.0
 	github.com/stretchr/testify v1.9.0
 	github.com/zde37/pinata-go-sdk v1.0.0
-	golang.org/x/sync v0.7.0
+	golang.org/x/sync v0.11.0
 )
 
 require (
@@ -107,11 +106,11 @@ require (
 	github.com/urfave/cli/v2 v2.25.7 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/text v0.15.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
