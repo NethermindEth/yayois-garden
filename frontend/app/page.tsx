@@ -73,6 +73,9 @@ export default function Home() {
         <Image
           src="/HeroBackground.png"
           alt="Background"
+          width={1920}
+          height={290}
+          priority
           className="w-full h-[290px] object-cover object-center"
         />
       </div>
