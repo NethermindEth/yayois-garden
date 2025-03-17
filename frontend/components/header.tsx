@@ -1,6 +1,8 @@
+'use client';
+
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/Logo'
+import { WalletButton } from '@/components/wallet-button'
 
 export function Header() {
   return (
@@ -23,9 +25,7 @@ export function Header() {
             Leaderboard
           </Link>
         </nav>
-        <Button variant="outline" className="bg-white text-black rounded hover:bg-gray-200">
-          Connect wallet
-        </Button>
+        <WalletButton />
       </div>
     </header>
   )
